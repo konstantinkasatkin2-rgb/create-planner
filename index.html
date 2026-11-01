@@ -2153,19 +2153,35 @@ function drawFace3(pts,P,img,color,shade){
   ctx.closePath();
   ctx.strokeStyle="rgba(0,0,0,0.35)";ctx.lineWidth=1;ctx.stroke();
 }
+function texId3(type,face){
+  /* подбор текстуры грани: front → side → базовая */
+  const has=id=>!!(TEXIMG[id]&&TEXIMG[id].complete&&TEXIMG[id].naturalWidth);
+  if(face==="front"){
+    if(has(type+"__front"))return type+"__front";
+    if(has(type+"__side"))return type+"__side";
+  }else if(face==="top"){
+    if(has(type+"__top"))return type+"__top";
+  }else{ /* side */
+    if(has(type+"__side"))return type+"__side";
+  }
+  return type;
+}
 function drawCube3(bl,P,b,e){
   const x=bl.x,y=bl.y,h=h3(bl.type);
   const color=BLOCKS[bl.type].color;
-  const img=tex3(bl.type,color);
+  const facing=DIRS[bl.dir]||null;   /* нормаль «лицевой» грани */
   /* грани: [0]=верх-лево, [1]=верх-право, [2]=низ-право, [3]=низ-лево
      (текстура не переворачивается) */
   const sides=[
-    {nx:0,ny:-1,c:[[x,y,h],[x+1,y,h],[x+1,y,0],[x,y,0]],shade:0.42},
-    {nx:0,ny: 1,c:[[x+1,y+1,h],[x,y+1,h],[x,y+1,0],[x+1,y+1,0]],shade:0.28},
-    {nx:1,ny: 0,c:[[x+1,y,h],[x+1,y+1,h],[x+1,y+1,0],[x+1,y,0]],shade:0.18},
-    {nx:-1,ny:0,c:[[x,y+1,h],[x,y,h],[x,y,0],[x,y+1,0]],shade:0.52}
+    {nx:0,ny:-1,face:"side",c:[[x,y,h],[x+1,y,h],[x+1,y,0],[x,y,0]],shade:0.28},
+    {nx:0,ny: 1,face:"side",c:[[x+1,y+1,h],[x,y+1,h],[x,y+1,0],[x+1,y+1,0]],shade:0.22},
+    {nx:1,ny: 0,face:"side",c:[[x+1,y,h],[x+1,y+1,h],[x+1,y+1,0],[x+1,y,0]],shade:0.14},
+    {nx:-1,ny:0,face:"side",c:[[x,y+1,h],[x,y,h],[x,y,0],[x,y+1,0]],shade:0.36}
   ];
-  const faces=[{c:[[x,y,h],[x+1,y,h],[x+1,y+1,h],[x,y+1,h]],shade:0}];
+  /* «лицевая» грань = та, чья нормаль совпадает с направлением блока */
+  if(facing)for(const s of sides)
+    if(s.nx===facing.x&&s.ny===facing.y)s.face="front";
+  const faces=[{nx:0,ny:0,face:"top",c:[[x,y,h],[x+1,y,h],[x+1,y+1,h],[x,y+1,h]],shade:0}];
   /* грань видна, если её нормаль смотрит на камеру: dot(n,f) < 0 */
   for(const s of sides)if(s.nx*b.f.x+s.ny*b.f.y<-0.001)faces.push(s);
   for(const f of faces){
@@ -2174,8 +2190,10 @@ function drawCube3(bl,P,b,e){
     f.d=-f.d/4; /* больше = ближе к камере */
   }
   faces.sort((a,c2)=>a.d-c2.d); /* дальние — первыми */
-  for(const f of faces)
+  for(const f of faces){
+    const img=tex3(texId3(bl.type,f.face),color);
     drawFace3(f.c.map(p=>P(p[0],p[1],p[2])),P,img,color,f.shade);
+  }
 }
 function render3D(now){
   animT=now;

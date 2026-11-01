@@ -28,9 +28,9 @@ emit belt            "$CJ" assets/create/textures/block/belt.png
 emit funnel          "$CJ" assets/create/textures/block/funnel_closed.png
 emit chute           "$CJ" assets/create/textures/block/chute.png
 emit smart_chute     "$CJ" assets/create/textures/block/chute_smart.png
-emit splitter        "$CJ" assets/create/textures/item/filter.png
+emit splitter        "$CJ" assets/create/textures/block/andesite_casing.png
 emit ejector         "$CJ" assets/create/textures/block/weighted_ejector_top.png
-emit shaft           "$CJ" assets/create/textures/block/gantry_shaft.png
+emit shaft           "$CJ" assets/create/textures/block/andesite_casing.png
 emit cog             "$CJ" assets/create/textures/block/cogwheel.png
 emit large_cog       "$CJ" assets/create/textures/block/large_cogwheel.png
 emit gearbox         "$CJ" assets/create/textures/block/gearbox.png
@@ -104,6 +104,17 @@ emit andesite        "$MJ" assets/minecraft/textures/block/andesite.png
 emit oak_log         "$MJ" assets/minecraft/textures/block/oak_log.png
 emit oak_planks      "$MJ" assets/minecraft/textures/block/oak_planks.png
 emit stripped_log    "$MJ" assets/minecraft/textures/block/stripped_oak_log.png
+# --- текстуры граней для 3D (top/side/front) ---
+emit chest__top       "$MJ" assets/minecraft/textures/block/crafting_table_top.png
+emit chest__side      "$MJ" assets/minecraft/textures/block/crafting_table_side.png
+emit chest__front     "$MJ" assets/minecraft/textures/block/crafting_table_front.png
+emit sink__top        "$MJ" assets/minecraft/textures/block/cauldron_top.png
+emit press__side      "$CJ" assets/create/textures/block/mechanical_press_side.png
+emit ejector__side    "$CJ" assets/create/textures/block/weighted_ejector_casing.png
+emit gearbox__top     "$CJ" assets/create/textures/block/gearbox_top.png
+emit fluid_tank__top  "$CJ" assets/create/textures/block/fluid_tank_top.png
+emit drill__side      "$CJ" assets/create/textures/block/andesite_casing.png
+emit saw__side        "$CJ" assets/create/textures/block/andesite_casing.png
 echo '};' >> "$OUT"
 rm -rf "$TMP"
 echo "Готово: $count текстур, пропущено: $miss, размер: $(wc -c < "$OUT") байт"
