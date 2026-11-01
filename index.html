@@ -1142,8 +1142,8 @@ function drawItems(s){
   for(const o of state.items){
     const it=ITEMS[o.i];if(!it)continue;
     const dv=DIRS[o.dirIn]||DIRS.E;
-    const px=o.cx*CS+CS/2-o.p*dv.x*CS;
-    const py=o.cy*CS+CS/2-o.p*dv.y*CS;
+    const px=o.cx*CS+CS/2+(o.p-0.5)*dv.x*CS;
+    const py=o.cy*CS+CS/2+(o.p-0.5)*dv.y*CS;
     const r=8;
     ctx.beginPath();ctx.arc(px,py,r,0,Math.PI*2);
     ctx.fillStyle=it.c;ctx.fill();
@@ -1161,8 +1161,8 @@ function drawItems(s){
   for(const o of state.fluids){
     const fl=FLUIDS[o.f];if(!fl)continue;
     const dv=DIRS[o.dirIn]||DIRS.E;
-    const px=o.cx*CS+CS/2-o.p*dv.x*CS;
-    const py=o.cy*CS+CS/2-o.p*dv.y*CS;
+    const px=o.cx*CS+CS/2+(o.p-0.5)*dv.x*CS;
+    const py=o.cy*CS+CS/2+(o.p-0.5)*dv.y*CS;
     ctx.beginPath();ctx.arc(px,py,7,0,Math.PI*2);
     ctx.fillStyle=fl.c;ctx.fill();
     ctx.strokeStyle="#ffffff66";ctx.lineWidth=1;ctx.stroke();
@@ -1841,7 +1841,7 @@ cv.addEventListener("wheel",ev=>{
   ev.preventDefault();
   if(state.view3d){
     state.cam3.scale=clamp(state.cam3.scale*(ev.deltaY<0?1.1:0.9),8,90);
-    document.getElementById("stZoom").textContent="Масштаб: "+Math.round(state.cam3.scale/28*100)+"%";
+    document.getElementById("stZoom").textContent="Масштаб: "+Math.round(state.cam3.scale/30*100)+"%";
     return;
   }
   const p=canvasPos(ev);
@@ -2054,7 +2054,8 @@ init();
    3D-ВИД СХЕМЫ (изометрия, вращение — как в cubical.xyz)
 ========================================================= */
 state.view3d=false;
-state.cam3={yaw:0.75,pitch:1.0,scale:28,ox:0,oy:0};
+state.cam3={yaw:0.7,pitch:0.85,scale:40,ox:0,oy:0};
+const TEX3D={};
 
 function view3dBasis(){
   const c=state.cam3;
@@ -2102,13 +2103,28 @@ function make3d(){
   };
   return {b,P,blocks,w,hh};
 }
-function drawFace3(pts,P,color,texId,shade){
+function tex3(id,color){
+  /* полутекстуры Create (воронка, пресс и т.п.) композитим поверх цвета блока */
+  if(!id)return null;
+  const key=id+"|"+(color||"");
+  if(TEX3D[key])return TEX3D[key];
+  const src=TEXIMG[id];
+  if(!src||!src.complete||!src.naturalWidth)return null;
+  const c=document.createElement("canvas");
+  c.width=src.naturalWidth;c.height=src.naturalHeight;
+  const g=c.getContext("2d");
+  g.imageSmoothingEnabled=false;
+  g.fillStyle=color||"#7a7f86";
+  g.fillRect(0,0,c.width,c.height);
+  g.drawImage(src,0,0);
+  TEX3D[key]=c;
+  return c;
+}
+function drawFace3(pts,P,img,color,shade){
   const A=pts[0],B=pts[1],D=pts[3];
   const ux=B.x-A.x,uy=B.y-A.y,vx=D.x-A.x,vy=D.y-A.y;
-  const hasTex=texId&&texReady(texId);
-  if(hasTex){
-    const img=TEXIMG[texId];
-    const n=img.naturalWidth||16;
+  if(img&&img.width){
+    const n=img.width;
     ctx.save();
     ctx.setTransform(ux/n*DPR,uy/n*DPR,vx/n*DPR,vy/n*DPR,A.x*DPR,A.y*DPR);
     ctx.imageSmoothingEnabled=false;
@@ -2139,24 +2155,27 @@ function drawFace3(pts,P,color,texId,shade){
 }
 function drawCube3(bl,P,b,e){
   const x=bl.x,y=bl.y,h=h3(bl.type);
-  const tex=tex3(bl.type);
   const color=BLOCKS[bl.type].color;
+  const img=tex3(bl.type,color);
+  /* грани: [0]=верх-лево, [1]=верх-право, [2]=низ-право, [3]=низ-лево
+     (текстура не переворачивается) */
   const sides=[
-    {nx:0,ny:-1,c:[[x,y,0],[x+1,y,0],[x+1,y,h],[x,y,h]],shade:0.45},
-    {nx:0,ny: 1,c:[[x+1,y+1,0],[x,y+1,0],[x,y+1,h],[x+1,y+1,h]],shade:0.30},
-    {nx:1,ny: 0,c:[[x+1,y,0],[x+1,y+1,0],[x+1,y+1,h],[x+1,y,h]],shade:0.20},
-    {nx:-1,ny:0,c:[[x,y+1,0],[x,y,0],[x,y,h],[x,y+1,h]],shade:0.55}
+    {nx:0,ny:-1,c:[[x,y,h],[x+1,y,h],[x+1,y,0],[x,y,0]],shade:0.42},
+    {nx:0,ny: 1,c:[[x+1,y+1,h],[x,y+1,h],[x,y+1,0],[x+1,y+1,0]],shade:0.28},
+    {nx:1,ny: 0,c:[[x+1,y,h],[x+1,y+1,h],[x+1,y+1,0],[x+1,y,0]],shade:0.18},
+    {nx:-1,ny:0,c:[[x,y+1,h],[x,y,h],[x,y,0],[x,y+1,0]],shade:0.52}
   ];
   const faces=[{c:[[x,y,h],[x+1,y,h],[x+1,y+1,h],[x,y+1,h]],shade:0}];
-  for(const s of sides)if(s.nx*b.f.x+s.ny*b.f.y>0.001)faces.push(s);
+  /* грань видна, если её нормаль смотрит на камеру: dot(n,f) < 0 */
+  for(const s of sides)if(s.nx*b.f.x+s.ny*b.f.y<-0.001)faces.push(s);
   for(const f of faces){
     f.d=0;
     for(const p of f.c)f.d+=proj3(p[0],p[1],p[2],b).d;
-    f.d/=4;
+    f.d=-f.d/4; /* больше = ближе к камере */
   }
-  faces.sort((a,c2)=>c2.d-a.d);
+  faces.sort((a,c2)=>a.d-c2.d); /* дальние — первыми */
   for(const f of faces)
-    drawFace3(f.c.map(p=>P(p[0],p[1],p[2])),P,color,tex,f.shade);
+    drawFace3(f.c.map(p=>P(p[0],p[1],p[2])),P,img,color,f.shade);
 }
 function render3D(now){
   animT=now;
@@ -2189,23 +2208,23 @@ function render3D(now){
   const ents=[];
   for(const bl of blocks){
     const cc=P(bl.x+0.5,bl.y+0.5,h3(bl.type)/2);
-    ents.push({d:cc.d,bl});
+    ents.push({d:-cc.d,bl});
   }
   for(const o of state.items){
     const dv=DIRS[o.dirIn]||DIRS.E;
-    const px=o.cx+0.5-o.p*dv.x, py=o.cy+0.5-o.p*dv.y;
+    const px=o.cx+0.5+(o.p-0.5)*dv.x, py=o.cy+0.5+(o.p-0.5)*dv.y;
     const cc=P(px,py,0.62);
-    ents.push({d:cc.d+0.02,sprite:o.i,color:ITEMS[o.i]?ITEMS[o.i].c:"#888",
+    ents.push({d:-cc.d+0.02,sprite:o.i,color:ITEMS[o.i]?ITEMS[o.i].c:"#888",
       cx:cc.x,cy:cc.y,size:state.cam3.scale*0.5});
   }
   for(const o of state.fluids){
     const dv=DIRS[o.dirIn]||DIRS.E;
-    const px=o.cx+0.5-o.p*dv.x, py=o.cy+0.5-o.p*dv.y;
+    const px=o.cx+0.5+(o.p-0.5)*dv.x, py=o.cy+0.5+(o.p-0.5)*dv.y;
     const cc=P(px,py,0.3);
-    ents.push({d:cc.d+0.02,sprite:o.f,color:FLUIDS[o.f]?FLUIDS[o.f].c:"#58a",
+    ents.push({d:-cc.d+0.02,sprite:o.f,color:FLUIDS[o.f]?FLUIDS[o.f].c:"#58a",
       cx:cc.x,cy:cc.y,size:state.cam3.scale*0.4});
   }
-  ents.sort((a,c2)=>c2.d-a.d);
+  ents.sort((a,c2)=>a.d-c2.d);
   for(const e of ents){
     if(e.sprite){
       const s=e.size;
@@ -2225,6 +2244,8 @@ function render3D(now){
   /* метки вход → выход над ступенями */
   if(state.showLabels){
     ctx.textAlign="center";ctx.textBaseline="middle";
+    ctx.font="10px 'Segoe UI Emoji','Segoe UI',sans-serif";
+    const labs=[];
     for(const bl of blocks){
       const d=BLOCKS[bl.type];
       let txt=null;
@@ -2239,15 +2260,18 @@ function render3D(now){
         txt=(ITEMS[bl.cfg.item]?ITEMS[bl.cfg.item].e:"")+" ×"+Number(bl.cfg.rate||1);
       }else if(d.sink&&!d.void)txt="📥 "+bl.inN;
       if(!txt)continue;
-      const q=P(bl.x+0.5,bl.y+0.5,h3(bl.type)+0.55);
-      ctx.font="10px 'Segoe UI Emoji','Segoe UI',sans-serif";
-      const tw=ctx.measureText(txt).width+10;
+      labs.push({q:P(bl.x+0.5,bl.y+0.5,h3(bl.type)+0.55),txt});
+    }
+    labs.sort((a,c2)=>a.q.d-c2.q.d); /* дальние — первыми */
+    for(const L of labs){
+      const q=L.q;
+      const tw=ctx.measureText(L.txt).width+10;
       ctx.fillStyle="#10131add";
       ctx.beginPath();
       if(ctx.roundRect)ctx.roundRect(q.x-tw/2,q.y-8,tw,16,5);else ctx.rect(q.x-tw/2,q.y-8,tw,16);
       ctx.fill();
       ctx.fillStyle="#ffe9b0";
-      ctx.fillText(txt,q.x,q.y);
+      ctx.fillText(L.txt,q.x,q.y);
     }
   }
   /* выделение / наведение */

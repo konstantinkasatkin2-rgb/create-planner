@@ -53,7 +53,7 @@ emit creative_motor  "$CJ" assets/create/textures/block/creative_motor.png
 emit electric_motor  "$CJ" assets/create/textures/block/creative_motor.png
 # --- блоки (ванильные) ---
 emit chest           "$MJ" assets/minecraft/textures/block/crafting_table_front.png
-emit sink            "$MJ" assets/minecraft/textures/block/furnace_front.png
+emit sink            "$MJ" assets/minecraft/textures/block/cauldron_side.png
 emit void_box        "$MJ" assets/minecraft/textures/block/obsidian.png
 # --- предметы (Create) ---
 emit copper_ingot    "$CJ" assets/create/textures/item/copper_ingot.png
