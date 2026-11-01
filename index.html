@@ -1,0 +1,1965 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Create — планировщик конвейерных линий</title>
+<style>
+:root{
+  --bg:#14171b; --panel:#1e2329; --panel2:#252b32; --line:#333a42;
+  --text:#d8dde3; --dim:#8a939d; --brass:#d9a520; --andesite:#9a9a92;
+  --ok:#5aa05a; --bad:#c04a4a; --accent:#4a90c0;
+}
+*{box-sizing:border-box; margin:0; padding:0;}
+html,body{height:100%; overflow:hidden;}
+body{
+  background:var(--bg); color:var(--text);
+  font:13px/1.45 "Segoe UI", Roboto, sans-serif;
+  display:flex; flex-direction:column; user-select:none;
+}
+#toolbar{
+  display:flex; align-items:center; gap:6px; padding:6px 10px;
+  background:var(--panel); border-bottom:1px solid var(--line); flex-wrap:wrap;
+}
+#toolbar .brand{font-weight:700; color:var(--brass); margin-right:8px; font-size:14px; white-space:nowrap;}
+#toolbar .brand small{color:var(--dim); font-weight:400;}
+.sep{width:1px; height:22px; background:var(--line); margin:0 4px;}
+button, select, input[type=number]{
+  background:var(--panel2); color:var(--text); border:1px solid var(--line);
+  border-radius:5px; padding:4px 9px; font:inherit; cursor:pointer;
+}
+button:hover{border-color:var(--brass); color:#fff;}
+button.active{background:var(--brass); color:#1a1a14; border-color:var(--brass); font-weight:600;}
+button.danger:hover{border-color:var(--bad); color:#ffb0b0;}
+select{cursor:pointer;}
+input[type=number]{width:64px; cursor:text;}
+input[type=text]{background:#171b20; color:var(--text); border:1px solid var(--line); border-radius:5px; padding:4px 6px; font:inherit;}
+label.toggle{display:flex; align-items:center; gap:5px; color:var(--dim); cursor:pointer; white-space:nowrap;}
+label.toggle input{accent-color:var(--brass); cursor:pointer;}
+#main{flex:1; display:flex; min-height:0;}
+aside{
+  background:var(--panel); display:flex; flex-direction:column; min-height:0;
+  border-right:1px solid var(--line);
+}
+#palette{width:210px; overflow-y:auto;}
+#right{width:320px; border-right:none; border-left:1px solid var(--line);}
+aside h3{
+  font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--dim);
+  padding:10px 10px 5px; position:sticky; top:0; background:var(--panel); z-index:2;
+}
+.cat{margin-bottom:2px;}
+.cat-head{
+  display:flex; align-items:center; gap:6px; padding:6px 10px; cursor:pointer;
+  background:var(--panel2); font-weight:600; font-size:12px;
+}
+.cat-head:hover{color:var(--brass);}
+.cat-head .arr{font-size:9px; color:var(--dim);}
+.cat-items{display:none; padding:4px; display:grid; grid-template-columns:1fr 1fr; gap:4px;}
+.cat.open .cat-items{display:grid;}
+.pitem{
+  background:var(--panel2); border:1px solid var(--line); border-radius:6px;
+  padding:6px 4px; text-align:center; cursor:pointer; font-size:11px; line-height:1.25;
+}
+.pitem .ic{font-size:17px; display:block;}
+.pitem:hover{border-color:var(--brass);}
+.pitem.active{border-color:var(--brass); background:#3a3320; color:#ffe;}
+#canvasWrap{flex:1; position:relative; min-width:0; overflow:hidden; background:#0e1114;}
+#cv{position:absolute; inset:0; display:block; cursor:crosshair;}
+#tooltip{
+  position:absolute; pointer-events:none; background:#10131aee; border:1px solid var(--line);
+  border-radius:6px; padding:6px 9px; font-size:12px; max-width:260px; z-index:10;
+  display:none; box-shadow:0 4px 14px #0008;
+}
+#tooltip b{color:var(--brass);}
+#tooltip .trow{display:flex; gap:6px; align-items:center; flex-wrap:wrap;}
+#tabs{display:flex; border-bottom:1px solid var(--line);}
+#tabs button{flex:1; border:none; border-radius:0; background:transparent; padding:8px 4px; color:var(--dim);}
+#tabs button.active{background:var(--panel2); color:var(--brass); border-bottom:2px solid var(--brass);}
+.tabpage{display:none; padding:10px; overflow-y:auto; flex:1;}
+.tabpage.active{display:block;}
+.field{margin-bottom:9px;}
+.field>label{display:block; font-size:11px; color:var(--dim); margin-bottom:3px;}
+.field select{width:100%;}
+.row{display:flex; gap:6px; align-items:center; flex-wrap:wrap;}
+.hint{color:var(--dim); font-size:11px;}
+.badge{display:inline-block; padding:1px 7px; border-radius:9px; font-size:11px; background:var(--panel2); border:1px solid var(--line);}
+.badge.ok{color:#9fd09f; border-color:#3a5a3a;}
+.badge.bad{color:#ff9a9a; border-color:#6a3a3a;}
+.badge.warn{color:#ffd89a; border-color:#6a5a3a;}
+.chip{display:inline-flex; align-items:center; gap:4px; background:var(--panel2); border:1px solid var(--line); border-radius:4px; padding:1px 5px; font-size:11px;}
+.chip button{border:none; background:none; color:var(--dim); padding:0 2px; font-size:12px;}
+.chip button:hover{color:var(--bad);}
+table{width:100%; border-collapse:collapse; font-size:11.5px;}
+th,td{border-bottom:1px solid var(--line); padding:4px 5px; text-align:left; vertical-align:middle;}
+th{color:var(--dim); font-weight:600; font-size:10.5px; text-transform:uppercase;}
+td .ic{font-size:14px;}
+.io{display:flex; gap:4px; align-items:center; flex-wrap:wrap;}
+h4{font-size:12px; color:var(--brass); margin:12px 0 5px; text-transform:uppercase; letter-spacing:.06em;}
+.kv{display:flex; justify-content:space-between; padding:3px 0; border-bottom:1px dashed #2a3038; font-size:12px;}
+.kv b{color:#fff; font-weight:600;}
+#status{
+  display:flex; gap:14px; padding:4px 10px; background:var(--panel); border-top:1px solid var(--line);
+  font-size:11.5px; color:var(--dim); flex-wrap:wrap;
+}
+#status .warn{color:#ffb060;}
+#status .err{color:#ff8a8a;}
+.legend{font-size:11px; color:var(--dim); margin-top:6px; line-height:1.7;}
+.legend span{display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:5px; vertical-align:-1px;}
+kbd{background:#2a3038; border:1px solid var(--line); border-radius:3px; padding:0 4px; font-size:11px; font-family:inherit;}
+.help p{margin:6px 0; font-size:12px; color:#b8c0c8;}
+::-webkit-scrollbar{width:9px; height:9px;}
+::-webkit-scrollbar-thumb{background:#333a42; border-radius:5px;}
+::-webkit-scrollbar-track{background:#171b20;}
+</style>
+</head>
+<body>
+<header id="toolbar">
+  <span class="brand">⚙ Create <small>планировщик линий</small></span>
+  <span class="sep"></span>
+  <button data-tool="select" class="active" title="Выделение (V)">🖱 Выделение</button>
+  <button data-tool="belt" title="Рисовать ленту (B)">〰 Лента</button>
+  <button data-tool="block" title="Ставить блок (C)">🧱 Блок</button>
+  <button data-tool="erase" title="Ластик (E)">🧽 Ластик</button>
+  <button data-tool="pan" title="Панорама (H) или средняя кнопка">✋ Панорама</button>
+  <span class="sep"></span>
+  <button id="btnPlay" title="Запуск/пауза (Пробел)">▶ Пуск</button>
+  <select id="simSpeed" title="Скорость симуляции">
+    <option value="0.5">0.5×</option>
+    <option value="1" selected>1×</option>
+    <option value="2">2×</option>
+    <option value="4">4×</option>
+  </select>
+  <button id="btnResetSim" title="Сбросить предметы и статистику">⟲ Сброс</button>
+  <span class="sep"></span>
+  <button id="btnDemo">🏠 Пример линии</button>
+  <button id="btnNew" class="danger">🗑 Новый</button>
+  <button id="btnExport">💾 JSON</button>
+  <button id="btnImport">📂 Открыть</button>
+  <button id="btnPNG">🖼 PNG</button>
+  <input type="file" id="fileIn" accept=".json,application/json" style="display:none">
+  <span class="sep"></span>
+  <label class="toggle"><input type="checkbox" id="cbAuto" checked> Автопитание (SU)</label>
+  <label class="toggle"><input type="checkbox" id="cbLabels" checked> Метки вход/выход</label>
+  <label class="toggle"><input type="checkbox" id="cbPower"> Сеть питания</label>
+</header>
+<div id="main">
+  <aside id="palette"><h3>Блоки Create</h3><div id="paletteList"></div>
+    <div style="padding:8px 10px" class="hint">
+      <b>Клавиши:</b> <kbd>V</kbd> выделение, <kbd>B</kbd> лента, <kbd>C</kbd> блок,
+      <kbd>E</kbd> ластик, <kbd>H</kbd> панорама, <kbd>R</kbd> поворот,
+      <kbd>Del</kbd> удалить, <kbd>Пробел</kbd> пуск/пауза.
+    </div>
+  </aside>
+  <div id="canvasWrap">
+    <canvas id="cv"></canvas>
+    <div id="tooltip"></div>
+  </div>
+  <aside id="right">
+    <div id="tabs">
+      <button data-tab="props" class="active">Свойства</button>
+      <button data-tab="line">Линия</button>
+      <button data-tab="help">Справка</button>
+    </div>
+    <div class="tabpage active" id="tab-props"></div>
+    <div class="tabpage" id="tab-line"></div>
+    <div class="tabpage help" id="tab-help">
+      <h4>Как пользоваться</h4>
+      <p>1. Выберите блок в палитре слева и поставьте его на сетку (инструмент «Блок»).</p>
+      <p>2. Инструментом «Лента» проведите линию — она получит направление от движения мыши.</p>
+      <p>3. Поставьте <b>Сундук-источник</b> (настройте предмет и скорость) и <b>Сундук-приёмник</b>.</p>
+      <p>4. Вкладка «Свойства»: у каждого блока обработки выберите рецепт —
+        видно <b>предмет на входе</b> и <b>предмет на выходе</b> ступени,
+        очередь и счётчик.</p>
+      <p>5. Нажмите ▶ Пуск — предметы пойдут по конвейерам, ступени будут
+        перерабатывать их по рецептам.</p>
+      <p>6. Вкладка «Линия» показывает все ступени цепочки: вход → выход,
+        очередь, статистику и сеть питания (SU, RPM, перегрузка).</p>
+      <h4>Энергия</h4>
+      <p>Паровой двигатель, водяное колесо, креативный и электромоторы дают
+        <b>SU</b>. Потребители (пресс, дробилка, ленты…) создают нагрузку.
+        Если нагрузка &gt; ёмкость — сеть <b>перегружена</b> и останавливается.</p>
+      <p>Галочка «Автопитание» отключает проверку SU (удобно для быстрого
+        прототипирования).</p>
+      <h4>Импорт / экспорт</h4>
+      <p>«💾 JSON» выгружает проект, «📂 Открыть» — загружает, «🖼 PNG» —
+        картинка схемы. Проект также автосохраняется в браузере.</p>
+      <h4>Рецепты</h4>
+      <p id="helpRecipes" class="hint"></p>
+    </div>
+  </aside>
+</div>
+<footer id="status">
+  <span id="stTool">Инструмент: выделение</span>
+  <span id="stZoom">Масштаб: 100%</span>
+  <span id="stBlocks">Блоков: 0</span>
+  <span id="stItems">Предметов: 0</span>
+  <span id="stTime">Время: 0 с</span>
+  <span id="stPower"></span>
+  <span id="stWarn"></span>
+</footer>
+<script>
+"use strict";
+/* =========================================================
+   ПРЕДМЕТЫ
+========================================================= */
+const ITEMS = {
+  iron_ingot:{n:"Железный слиток",c:"#d8d8d8",e:"🔩"},
+  copper_ingot:{n:"Медный слиток",c:"#e07b39",e:"🪙"},
+  gold_ingot:{n:"Золотой слиток",c:"#f2c14e",e:"🥇"},
+  zinc_ingot:{n:"Цинковый слиток",c:"#c8ccd0",e:"⬜"},
+  brass_ingot:{n:"Латунный слиток",c:"#d9a520",e:"🔶"},
+  andesite_alloy:{n:"Андезитовый сплав",c:"#9a9a92",e:"◆"},
+  iron_nugget:{n:"Железная крошка",c:"#c8c8c8",e:"•"},
+  gold_nugget:{n:"Золотая крошка",c:"#e8c060",e:"•"},
+  iron_sheet:{n:"Железный лист",c:"#cfd4d8",e:"📃"},
+  copper_sheet:{n:"Медный лист",c:"#d8824a",e:"📃"},
+  gold_sheet:{n:"Золотой лист",c:"#ecd070",e:"📃"},
+  brass_sheet:{n:"Латунный лист",c:"#e0b040",e:"📃"},
+  sturdy_sheet:{n:"Прочный лист",c:"#7a8b6a",e:"🛡️"},
+  shaft:{n:"Вал",c:"#b9b9b9",e:"➤"},
+  cogwheel:{n:"Шестерёнка",c:"#c0a060",e:"⚙️"},
+  large_cogwheel:{n:"Большая шестерёнка",c:"#a08040",e:"⚙️"},
+  electron_tube:{n:"Электронная лампа",c:"#e05c8a",e:"🧪"},
+  precision_mechanism:{n:"Точный механизм",c:"#e8e8e0",e:"🛠️"},
+  iron_rod:{n:"Железный стержень",c:"#c0c4c8",e:"📏"},
+  rose_quartz:{n:"Розовый кварц",c:"#f0a0b0",e:"💗"},
+  polished_rose_quartz:{n:"Полированный кварц",c:"#ffb0c8",e:"✨"},
+  cobblestone:{n:"Булыжник",c:"#8a8a8a",e:"🧱"},
+  gravel:{n:"Гравий",c:"#a09a90",e:"🪨"},
+  sand:{n:"Песок",c:"#e3d3a0",e:"🏝️"},
+  soul_sand:{n:"Песок душ",c:"#5a4a3a",e:"😵"},
+  andesite:{n:"Андезит",c:"#b0b0aa",e:"⬜"},
+  raw_iron:{n:"Железная руда",c:"#c9a08a",e:"⛏️"},
+  raw_copper:{n:"Медная руда",c:"#c07a4a",e:"⛏️"},
+  raw_gold:{n:"Золотая руда",c:"#d8b04a",e:"⛏️"},
+  redstone:{n:"Редстоун",c:"#d11",e:"🟥"},
+  quartz:{n:"Кварц",c:"#eee",e:"🔷"},
+  oak_log:{n:"Дубовое бревно",c:"#8a6a3a",e:"🪵"},
+  oak_planks:{n:"Дубовые доски",c:"#b08a50",e:"🟫"},
+  stripped_log:{n:"Обтёсанное бревно",c:"#c8a060",e:"🪵"},
+  wheat:{n:"Пшеница",c:"#d8c860",e:"🌾"},
+  flour:{n:"Мука",c:"#f0e8c0",e:"🥛"},
+  dough:{n:"Тесто",c:"#d8c090",e:"🥐"},
+  bread:{n:"Хлеб",c:"#c08a4a",e:"🍞"},
+  apple:{n:"Яблоко",c:"#e04040",e:"🍎"},
+  honeyed_apple:{n:"Медовое яблоко",c:"#e8a020",e:"🍏"},
+  chocolate_bar:{n:"Шоколадка",c:"#6b4226",e:"🍫"},
+  raw_porkchop:{n:"Сырая свинина",c:"#e08090",e:"🥩"},
+  cooked_porkchop:{n:"Жареная свинина",c:"#b06040",e:"🍖"},
+  raw_beef:{n:"Сырая говядина",c:"#d05050",e:"🥩"},
+  cooked_beef:{n:"Стейк",c:"#9a4a30",e:"🍖"},
+  potato:{n:"Картофель",c:"#d8c878",e:"🥔"},
+  baked_potato:{n:"Печёный картофель",c:"#c8a050",e:"🍠"},
+  bone_meal:{n:"Костная мука",c:"#f0f0e0",e:"🦴"},
+};
+const FLUIDS = {
+  water:{n:"Вода",c:"#3d7bd9"},
+  lava:{n:"Лава",c:"#e05a10"},
+  honey:{n:"Мёд",c:"#e8a417"},
+  chocolate:{n:"Шоколад",c:"#6b4226"},
+  seed_oil:{n:"Масло семян",c:"#c9b458"},
+  creosote:{n:"Креозот",c:"#8a6d3b"},
+};
+const ITEM_LIST = Object.keys(ITEMS).sort((a,b)=>ITEMS[a].n.localeCompare(ITEMS[b].n,"ru"));
+const FLUID_LIST = Object.keys(FLUIDS);
+</script>
+<script>
+"use strict";
+/* =========================================================
+   БЛОКИ CREATE
+========================================================= */
+const DIRS = {N:{x:0,y:-1},E:{x:1,y:0},S:{x:0,y:1},W:{x:-1,y:0}};
+const DIR_LETTER = {N:"С",E:"В",S:"Ю",W:"З"}; // север/восток/юг/запад
+const DIR_ORDER = ["N","E","S","W"];
+function opposite(d){return {N:"S",S:"N",E:"W",W:"E"}[d];}
+
+const BLOCKS = {
+  belt:{n:"Конвейер",cat:"transport",color:"#4a5058",dir:true,stress:8,conducts:true,
+    help:"Лента несёт предметы по направлению стрелки."},
+  funnel:{n:"Воронка",cat:"transport",color:"#8a7a5a",dir:true,filter:true,conducts:true,
+    help:"Фильтрует предметы по списку, пропуская только разрешённые."},
+  chute:{n:"Жёлоб",cat:"transport",color:"#7a8288",dir:true,conducts:true,fast:2,
+    help:"Ускоренный проход предметов (×2)."},
+  smart_chute:{n:"Умный желоб",cat:"transport",color:"#5a8a8a",dir:true,filter:true,conducts:true,fast:2,
+    help:"Пропускает только предметы из фильтра, остальное задерживает."},
+  splitter:{n:"Разделитель",cat:"transport",color:"#9a7a3a",conducts:true,outs:true,
+    help:"1 вход, 3 выхода с фильтрами; чередует свободные выходы."},
+  ejector:{n:"Эжектор",cat:"transport",color:"#7a5a8a",dir:true,stress:4,conducts:true,
+    help:"Выбрасывает предмет на 3 клетки вперёд — через пустоту."},
+  shaft:{n:"Вал",cat:"mech",color:"#a8adb2",conducts:true,
+    help:"Передаёт вращение соседним блокам."},
+  cog:{n:"Шестерня",cat:"mech",color:"#c0a060",conducts:true,
+    help:"Зубчатое колесо, участвует в сети питания."},
+  large_cog:{n:"Большая шестерня",cat:"mech",color:"#a08040",conducts:true,
+    help:"Крупное колесо (×4 RPM в расчёте сети)."},
+  gearbox:{n:"Коробка передач",cat:"mech",color:"#8a8a7a",dir:true,conducts:true,
+    help:"Соединяет и поворачивает валы."},
+  crusher:{n:"Дробилка",cat:"process",color:"#8a5a4a",stress:16,conducts:true,recipes:"crusher",
+    help:"Дробит блоки и руды (в игре — пара колёс)."},
+  press:{n:"Пресс",cat:"process",color:"#a06040",stress:8,conducts:true,recipes:"press",
+    help:"Штампует слитки в листы, тесто в хлеб."},
+  mixer:{n:"Миксер",cat:"process",color:"#6a5a9a",stress:8,conducts:true,recipes:"mixer",
+    help:"Смешивает ингредиенты с жидкостями в базе."},
+  millstone:{n:"Мельница",cat:"process",color:"#9a9a60",stress:4,conducts:true,recipes:"millstone",
+    help:"Перемалывает: пшеницу в муку, камни в гравий."},
+  crafter:{n:"Мех. крафтер",cat:"process",color:"#4a7a9a",stress:16,conducts:true,recipes:"crafter",
+    help:"Автоматический верстак для сложных рецептов."},
+  saw:{n:"Пила",cat:"process",color:"#7a7a8a",dir:true,stress:8,conducts:true,recipes:"saw",
+    help:"Пилит брёвна в доски."},
+  drill:{n:"Бур",cat:"process",color:"#6a6a7a",dir:true,stress:4,conducts:true,recipes:"drill",
+    help:"Бурит камень в булыжник."},
+  deployer:{n:"Деплойер",cat:"process",color:"#9a6a5a",dir:true,stress:4,conducts:true,recipes:"deployer",
+    help:"Имитирует руку игрока: тесление брёвен, полировка кварца."},
+  fan:{n:"Вентилятор",cat:"process",color:"#5a8a9a",dir:true,stress:2,conducts:true,recipes:"fan",
+    help:"Обжиг, промывка и удушье предметов на потоке."},
+  fluid_pipe:{n:"Труба",cat:"fluid",color:"#4a6a8a",dir:true,conducts:true,pipe:true,
+    help:"Транспортирует жидкости."},
+  fluid_pump:{n:"Насос",cat:"fluid",color:"#3a5a7a",dir:true,stress:4,conducts:true,pipe:true,sourceFluid:true,
+    help:"Накачивает настроенную жидкость в трубы."},
+  fluid_tank:{n:"Резервуар",cat:"fluid",color:"#5a7a5a",dir:true,conducts:true,pipe:true,
+    help:"Накопитель жидкости (проходит насквозь)."},
+  spout:{n:"Сопло",cat:"fluid",color:"#7a6a4a",dir:true,stress:4,conducts:true,recipes:"spout",
+    help:"Заливает предметы жидкостью по рецепту."},
+  steam_engine:{n:"Паровой двигатель",cat:"power",color:"#8a4a3a",capacity:1024,rpm:128,conducts:true,
+    help:"Источник: 1024 SU @ 128 RPM."},
+  water_wheel:{n:"Водяное колесо",cat:"power",color:"#3a6a8a",capacity:128,rpm:32,conducts:true,dir:true,
+    help:"Источник: 128 SU @ 32 RPM."},
+  creative_motor:{n:"Креативный мотор",cat:"power",color:"#9a3a9a",capacity:1e9,conducts:true,dir:true,manual:true,
+    help:"Бесконечная энергия, RPM настраивается."},
+  electric_motor:{n:"Электромотор",cat:"power",color:"#3a8a6a",capacity:1024,rpm:128,conducts:true,dir:true,fe:true,
+    help:"Питание от FE (Create Crafts & Additions): 1024 SU @ 128 RPM."},
+  chest:{n:"Сундук-источник",cat:"storage",color:"#8a6a3a",dir:true,source:true,
+    help:"Подаёт настроенный предмет с заданной скоростью."},
+  sink:{n:"Сундук-приёмник",cat:"storage",color:"#6a4a2a",sink:true,
+    help:"Принимает предметы и считает произведённое."},
+  void_box:{n:"Утилизатор",cat:"storage",color:"#3a3a4a",sink:true,void:true,
+    help:"Удаляет предметы без учёта."},
+};
+const CATS = [
+  ["transport","Логистика"],["mech","Механика"],["process","Обработка"],
+  ["fluid","Жидкости"],["power","Энергия"],["storage","Хранилища"],
+];
+/* =========================================================
+   РЕЦЕПТЫ (упрощённые версии рецептов Create)
+========================================================= */
+function R(id,n,ins,outs,dur,fin){
+  return {id,n,
+    ins:ins.map(([i,c])=>({i,c})),
+    outs:outs.map(([i,c])=>({i,c})),
+    dur, fin:fin?{f:fin[0],a:fin[1]}:null};
+}
+const RECIPES = {
+  crusher:[
+    R("cr1","Булыжник → Гравий",[["cobblestone",1]],[["gravel",1]],2),
+    R("cr2","Гравий → Песок",[["gravel",1]],[["sand",1]],2),
+    R("cr3","Железная руда → Слиток",[["raw_iron",1]],[["iron_ingot",1]],2),
+    R("cr4","Медная руда → 3 слитка",[["raw_copper",1]],[["copper_ingot",3]],2),
+    R("cr5","Золотая руда → Слиток",[["raw_gold",1]],[["gold_ingot",1]],2),
+    R("cr6","Андезит → 2 сплава",[["andesite",2]],[["andesite_alloy",2]],2),
+  ],
+  press:[
+    R("pr1","Железный слиток → Лист",[["iron_ingot",1]],[["iron_sheet",1]],1.5),
+    R("pr2","Медный слиток → Лист",[["copper_ingot",1]],[["copper_sheet",1]],1.5),
+    R("pr3","Золотой слиток → Лист",[["gold_ingot",1]],[["gold_sheet",1]],1.5),
+    R("pr4","Латунный слиток → Лист",[["brass_ingot",1]],[["brass_sheet",1]],1.5),
+    R("pr5","Тесто → Хлеб",[["dough",1]],[["bread",1]],1.5),
+  ],
+  mixer:[
+    R("mx1","Медь + Цинк → 2 латуни",[["copper_ingot",1],["zinc_ingot",1]],[["brass_ingot",2]],4),
+    R("mx2","Мука + Вода → Тесто",[["flour",1]],[["dough",1]],4,["water",1]),
+    R("mx3","2 андезита → 2 сплава",[["andesite",2]],[["andesite_alloy",2]],3),
+  ],
+  millstone:[
+    R("ms1","Пшеница → Мука",[["wheat",1]],[["flour",1]],1.5),
+    R("ms2","Булыжник → Гравий",[["cobblestone",1]],[["gravel",1]],1.5),
+    R("ms3","Золотая руда → 2 золотых крошки",[["raw_gold",1]],[["gold_nugget",2]],1.5),
+  ],
+  crafter:[
+    R("cf1","2 листа + шестерёнка + вал → Точный механизм",
+      [["iron_sheet",2],["cogwheel",1],["shaft",1]],[["precision_mechanism",1]],6),
+    R("cf2","Кварц + 2 крошки → Электронная лампа",
+      [["polished_rose_quartz",1],["iron_nugget",2]],[["electron_tube",1]],4),
+    R("cf3","2 андезита + 2 крошки → 2 сплава",
+      [["andesite",2],["iron_nugget",2]],[["andesite_alloy",2]],4),
+    R("cf4","4 железных листа → Прочный лист",
+      [["iron_sheet",4]],[["sturdy_sheet",1]],4),
+    R("cf5","4 шестерёнки → Большая шестерёнка",
+      [["cogwheel",4]],[["large_cogwheel",1]],3),
+    R("cf6","2 слитка → 2 железных стержня",
+      [["iron_ingot",2]],[["iron_rod",2]],3),
+    R("cf7","Крошку + 2 редстоуна → Лампа",
+      [["iron_nugget",1],["redstone",2]],[["electron_tube",1]],3),
+  ],
+  saw:[
+    R("sw1","Бревно → 4 доски",[["oak_log",1]],[["oak_planks",4]],1.5),
+    R("sw2","Бревно → Обтёсанное бревно",[["oak_log",1]],[["stripped_log",1]],1.5),
+  ],
+  drill:[
+    R("dr1","Камень → Булыжник",[["stone_placeholder",0]],[],1), // не используется
+    R("dr2","Андезит → Булыжник",[["andesite",1]],[["cobblestone",1]],1.5),
+  ],
+  deployer:[
+    R("dp1","Бревно → Обтёсанное (топор)",[["oak_log",1]],[["stripped_log",1]],2),
+    R("dp2","Розовый кварц → Полированный",[["rose_quartz",1]],[["polished_rose_quartz",1]],2),
+  ],
+  fan:[
+    R("fa1","🔥 Обжиг: Сырая свинина → Жареная",[["raw_porkchop",1]],[["cooked_porkchop",1]],2),
+    R("fa2","🔥 Обжиг: Сырая говядина → Стейк",[["raw_beef",1]],[["cooked_beef",1]],2),
+    R("fa3","🔥 Обжиг: Картофель → Печёный",[["potato",1]],[["baked_potato",1]],2),
+    R("fa4","💧 Промывка: Гравий → Железная крошка",[["gravel",1]],[["iron_nugget",1]],2),
+    R("fa5","💧 Промывка: Песок → Золотая крошка",[["sand",1]],[["gold_nugget",1]],2),
+    R("fa6","💀 Удушье: Песок → Песок душ",[["sand",1]],[["soul_sand",1]],2),
+  ],
+  spout:[
+    R("sp1","Яблоко + Мёд → Медовое яблоко",[["apple",1]],[["honeyed_apple",1]],3,["honey",1]),
+    R("sp2","Хлеб + Шоколад → Шоколадка",[["bread",1]],[["chocolate_bar",1]],3,["chocolate",1]),
+    R("sp3","Крошка + Вода → ? (заглушка)",[["iron_nugget",1]],[["bone_meal",1]],2,["water",1]),
+  ],
+};
+RECIPES.drill = RECIPES.drill.filter(r=>r.ins.length);
+/* =========================================================
+   СОСТОЯНИЕ
+========================================================= */
+const CS = 48; // размер клетки
+const state = {
+  blocks:{},            // "x,y" -> block
+  items:[],             // {i,cx,cy,p,dirIn,dead}
+  fluids:[],            // {f,cx,cy,p,dirIn,dead}
+  sel:null, hover:null, tool:"select", paintType:null, paintDir:"E",
+  sim:{running:false, speed:1, t:0},
+  stats:{produced:{}, lost:0},
+  nets:[], autoPower:true, showLabels:true, showPower:false,
+  cam:{x:0,y:0,z:1},
+  undoStack:[],
+};
+function k(x,y){return x+","+y;}
+function getBlock(x,y){return state.blocks[k(x,y)];}
+function neighbor(b,d){const v=DIRS[d];return state.blocks[k(b.x+v.x,b.y+v.y)];}
+function clamp(v,a,b){return v<a?a:v>b?b:v;}
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
+function itemCount(q,i){let n=0;for(const x of q)if(x===i)n++;return n;}
+function uid(){return Math.random().toString(36).slice(2,9);}
+
+function makeBlock(type,x,y,dir){
+  const d=BLOCKS[type];
+  const b={type,x,y,dir:dir||(d.dir?"E":null),cfg:{},
+    q:[],fq:[],buf:[],work:0,acc:0,cool:0,
+    inN:0,outN:0,net:null,spin:0,lastEmit:0};
+  if(d.recipes){
+    const list=RECIPES[d.recipes];
+    b.cfg.recipe=list[0].id;
+  }
+  if(type==="chest"){b.cfg.item="iron_ingot";b.cfg.rate=1;}
+  if(type==="fluid_pump"){b.cfg.fluid="water";b.cfg.rate=0.5;}
+  if(type==="creative_motor"){b.cfg.rpm=128;}
+  if(d.filter){b.cfg.filter=[];}
+  if(d.outs){
+    b.cfg.outs=[
+      {d:"E",f:[]},{d:"S",f:[]},{d:"W",f:[]}
+    ];
+    b.cfg.last=0;
+  }
+  return b;
+}
+function placeBlock(type,x,y,dir){
+  const b=makeBlock(type,x,y,dir);
+  state.blocks[k(x,y)]=b;
+  touch();
+  return b;
+}
+function removeBlock(x,y){
+  delete state.blocks[k(x,y)];
+  if(state.sel&&state.sel.x===x&&state.sel.y===y)state.sel=null;
+  touch();
+}
+function touch(){
+  saveTimer();
+  computePower();
+}
+/* =========================================================
+   АВТОСОХРАНЕНИЕ
+========================================================= */
+let saveT=null;
+function saveTimer(){clearTimeout(saveT);saveT=setTimeout(saveLocal,400);}
+function serialize(){
+  const blocks={};
+  for(const key in state.blocks){
+    const b=state.blocks[key];
+    blocks[key]={type:b.type,x:b.x,y:b.y,dir:b.dir,cfg:b.cfg};
+  }
+  return {v:1,blocks};
+}
+function saveLocal(){
+  try{localStorage.setItem("create-planner-v1",JSON.stringify(serialize()));}catch(e){}
+}
+function loadLocal(){
+  try{
+    const s=localStorage.getItem("create-planner-v1");
+    if(!s)return false;
+    applyData(JSON.parse(s));
+    return true;
+  }catch(e){return false;}
+}
+function applyData(data){
+  state.blocks={};
+  const src=data.blocks||{};
+  for(const key in src){
+    const d=src[key];
+    if(!BLOCKS[d.type])continue;
+    const b=makeBlock(d.type,d.x,d.y,d.dir);
+    Object.assign(b.cfg,d.cfg||{});
+    state.blocks[key]=b;
+  }
+  resetSim(false);
+  touch();
+}
+function resetSim(clearStats=true){
+  state.items=[];state.fluids=[];state.sim.t=0;
+  for(const b of Object.values(state.blocks)){
+    b.q=[];b.fq=[];b.buf=[];b.work=0;b.acc=0;b.inN=0;b.outN=0;b.lastEmit=0;
+  }
+  if(clearStats){state.stats={produced:{},lost:0};}
+}
+</script>
+<script>
+"use strict";
+/* =========================================================
+   ЭНЕРГИЯ (SU / RPM)
+========================================================= */
+function computePower(){
+  const seen=new Set(), nets=[];
+  const all=Object.values(state.blocks);
+  for(const b of all){
+    const key=k(b.x,b.y);
+    if(seen.has(key)||!BLOCKS[b.type].conducts)continue;
+    const comp=[];const stack=[b];seen.add(key);
+    while(stack.length){
+      const c=stack.pop();comp.push(c);
+      for(const dd of DIR_ORDER){
+        const v=DIRS[dd];
+        const n=state.blocks[k(c.x+v.x,c.y+v.y)];
+        if(n&&!seen.has(k(n.x,n.y))&&BLOCKS[n.type].conducts){
+          seen.add(k(n.x,n.y));stack.push(n);
+        }
+      }
+    }
+    let cap=0,load=0;const rpms=[];
+    for(const c of comp){
+      const d=BLOCKS[c.type];
+      if(d.capacity){
+        cap+=d.capacity;
+        rpms.push(c.type==="creative_motor"?Number(c.cfg.rpm)||128:d.rpm);
+      }
+      if(d.stress)load+=d.stress;
+    }
+    const rpm=rpms.length?Math.min.apply(null,rpms):null;
+    const ok=load<=cap;
+    const net={comp,cap,load,rpm,ok,idx:nets.length};
+    nets.push(net);
+    for(const c of comp)c.net=net.idx;
+  }
+  state.nets=nets;
+}
+/* множитель скорости блока от его сети питания */
+function netFactor(b){
+  if(state.autoPower)return 1;
+  if(b.net==null)return 1;
+  const net=state.nets[b.net];
+  if(!net)return 1;
+  if(net.cap>0&&!net.ok)return 0;            // перегрузка — остановка
+  if(!net.rpm)return 1;                       // нет генераторов — считаем нормой
+  return clamp(net.rpm/128,0.1,4);
+}
+function netInfo(b){
+  if(b.net==null||!state.nets[b.net])return null;
+  return state.nets[b.net];
+}
+/* =========================================================
+   СПИСКИ / ЯЧЕЙКИ
+========================================================= */
+function cellFree(cx,cy,minP){
+  for(const o of state.items)if(o.cx===cx&&o.cy===cy&&o.p<minP)return false;
+  return true;
+}
+function fluidFree(cx,cy,minP){
+  for(const o of state.fluids)if(o.cx===cx&&o.cy===cy&&o.p<minP)return false;
+  return true;
+}
+function addItem(item,cx,cy,dirIn){state.items.push({i:item,cx,cy,p:0,dirIn:dirIn||"E"});}
+function removeItem(o){o.dead=true;}
+function sinkIn(b,item){
+  state.stats.produced[item]=(state.stats.produced[item]||0)+1;
+  b.inN++;
+}
+/* =========================================================
+   ПРИЁМ ПРЕДМЕТОВ БЛОКАМИ
+========================================================= */
+function recipeOf(b){
+  const d=BLOCKS[b.type];
+  if(!d.recipes)return null;
+  if(b.cfg.recipe==="CUSTOM")return b.cfg.custom||null;
+  const list=RECIPES[d.recipes]||[];
+  return list.find(r=>r.id===b.cfg.recipe)||list[0]||null;
+}
+function canFilter(b,item){
+  const d=BLOCKS[b.type];
+  if(!d.filter)return true;
+  const f=b.cfg.filter||[];
+  return f.length===0||f.indexOf(item)>=0;
+}
+function tryConsume(b,item,fromDir){
+  const d=BLOCKS[b.type];
+  if(d.source||d.sink)return false;
+  if(b.dir&&fromDir===b.dir)return false;      // нельзя входить со стороны выхода
+  if(d.filter&&!canFilter(b,item))return false;
+  if(d.recipes){
+    const r=recipeOf(b);
+    if(!r)return false;
+    const want=r.ins.some(s=>s.i===item)&&b.q.length<16;
+    if(!want)return false;
+    b.q.push(item);b.inN++;
+    return true;
+  }
+  if(b.type==="ejector"){
+    if(b.buf.length>=3)return false;
+    b.buf.push(item);b.inN++;
+    return true;
+  }
+  return false;
+}
+function acceptSplit(b,item,fromDir){
+  const outs=b.cfg.outs||[];
+  if(b.buf.length>=4)return false;
+  if(!canFilterAny(b,item))return false;
+  b.buf.push(item);b.inN++;
+  return true;
+}
+function canFilterAny(b,item){
+  // разделитель пропускает, если предмет проходит хотя бы один выходной фильтр
+  const outs=b.cfg.outs||[];
+  const anyFiltered=outs.some(o=>o.f&&o.f.length);
+  if(!anyFiltered)return true;
+  return outs.some(o=>(!o.f||!o.f.length)||o.f.indexOf(item)>=0);
+}
+/* =========================================================
+   ВЫХОД (emit)
+========================================================= */
+function emitAt(nx,ny,item,fromDir){
+  const t=state.blocks[k(nx,ny)];
+  if(!t){state.stats.lost++;return true;}        // упало в пустоту
+  const d=BLOCKS[t.type];
+  if(t.type==="sink"){sinkIn(t,item);return true;}
+  if(t.type==="void_box")return true;
+  if(d.pipe||d.source)return false;
+  if(d.recipes||t.type==="ejector")return tryConsume(t,item,fromDir);
+  if(t.type==="splitter")return acceptSplit(t,item,fromDir);
+  if(d.filter&&!canFilter(t,item))return false;
+  if(cellFree(nx,ny,0.4)){addItem(item,nx,ny,t.dir||fromDir);return true;}
+  return false;
+}
+function emitFluidAt(nx,ny,fluid,fromDir){
+  const t=state.blocks[k(nx,ny)];
+  if(!t)return false;
+  const d=BLOCKS[t.type];
+  if(t.type==="sink")return true;
+  if(d.pipe){
+    if(t.type==="fluid_tank"&&t.fq.length>0){t.fq.push(fluid);return true;}
+    if(fluidFree(nx,ny,0.4)){state.fluids.push({f:fluid,cx:nx,cy:ny,p:0,dirIn:t.dir||fromDir});return true;}
+    return false;
+  }
+  if(d.recipes){ // сопло и машины с жидкостью — кладём в очередь жидкости
+    if(t.fq.length<8){t.fq.push(fluid);return true;}
+    return false;
+  }
+  return false;
+}
+/* =========================================================
+   ШАГ ПРЕДМЕТА (переход в следующую клетку)
+========================================================= */
+function stepItem(o){
+  const cb=state.blocks[k(o.cx,o.cy)];
+  const dv=DIRS[o.dirIn||(cb&&cb.dir)||"E"];
+  const nx=o.cx+dv.x,ny=o.cy+dv.y;
+  const t=state.blocks[k(nx,ny)];
+  if(!t){removeItem(o);state.stats.lost++;return "gone";}
+  const d=BLOCKS[t.type];
+  if(t.type==="sink"){sinkIn(t,o.i);removeItem(o);return "gone";}
+  if(t.type==="void_box"){removeItem(o);return "gone";}
+  if(d.pipe||d.source){removeItem(o);state.stats.lost++;return "gone";}
+  if(d.recipes||t.type==="ejector"||t.type==="splitter"){
+    const ok=t.type==="splitter"?acceptSplit(t,o.i,o.dirIn):tryConsume(t,o.i,o.dirIn);
+    if(ok){removeItem(o);return "gone";}
+    return "stall";
+  }
+  if(d.filter&&!canFilter(t,o.i))return "stall";
+  if(cellFree(nx,ny,0.4)){
+    o.cx=nx;o.cy=ny;o.dirIn=t.dir||o.dirIn;o.p-=1;
+    return "moved";
+  }
+  return "stall";
+}
+function moveItems(dt){
+  const groups={};
+  for(const o of state.items){
+    if(o.dead)continue;
+    const key=k(o.cx,o.cy);
+    (groups[key]=groups[key]||[]).push(o);
+  }
+  for(const key in groups){
+    const arr=groups[key].sort((a,b)=>b.p-a.p);
+    for(const o of arr){
+      if(o.dead)continue;
+      const cb=state.blocks[key];
+      let f=1;
+      if(cb){
+        const d=BLOCKS[cb.type];
+        f=netFactor(cb)*(d.fast||1);
+        if(cb.type==="funnel"&&o.dirIn!==cb.dir)f=1; // воронка — свой ритм не меняет
+      }
+      if(f<=0)continue;
+      o.p+=dt*f;
+      let guard=0;
+      while(o.p>=1&&guard++<16&&!o.dead){
+        const r=stepItem(o);
+        if(r==="stall"){o.p=0;break;}
+        if(r==="gone")break;
+      }
+    }
+  }
+  if(state.items.some(o=>o.dead))state.items=state.items.filter(o=>!o.dead);
+}
+/* =========================================================
+   ШАГ ЖИДКОСТИ
+========================================================= */
+function stepFluid(o){
+  const cb=state.blocks[k(o.cx,o.cy)];
+  const dv=DIRS[o.dirIn||(cb&&cb.dir)||"E"];
+  const nx=o.cx+dv.x,ny=o.cy+dv.y;
+  const t=state.blocks[k(nx,ny)];
+  if(!t){o.dead=true;return "gone";}
+  const d=BLOCKS[t.type];
+  if(t.type==="sink"){o.dead=true;return "gone";}
+  if(d.recipes&&d.pipe!==true){ // сопло/миксер принимают жидкость
+    if(t.fq.length<8){t.fq.push(o.f);o.dead=true;return "gone";}
+    return "stall";
+  }
+  if(d.pipe){
+    if(fluidFree(nx,ny,0.4)){o.cx=nx;o.cy=ny;o.dirIn=t.dir||o.dirIn;o.p-=1;return "moved";}
+    return "stall";
+  }
+  o.dead=true;return "gone";
+}
+function moveFluids(dt){
+  const groups={};
+  for(const o of state.fluids){
+    if(o.dead)continue;
+    const key=k(o.cx,o.cy);
+    (groups[key]=groups[key]||[]).push(o);
+  }
+  for(const key in groups){
+    const arr=groups[key].sort((a,b)=>b.p-a.p);
+    for(const o of arr){
+      if(o.dead)continue;
+      const cb=state.blocks[key];
+      const f=cb?netFactor(cb):1;
+      if(f<=0)continue;
+      o.p+=dt*f;
+      let guard=0;
+      while(o.p>=1&&guard++<16&&!o.dead){
+        const r=stepFluid(o);
+        if(r==="stall"){o.p=0;break;}
+        if(r==="gone")break;
+      }
+    }
+  }
+  if(state.fluids.some(o=>o.dead))state.fluids=state.fluids.filter(o=>!o.dead);
+}
+/* =========================================================
+   ИСТОЧНИКИ / НАСОСЫ
+========================================================= */
+function sourceTick(b,dt){
+  const f=netFactor(b);
+  if(f<=0)return;
+  b.acc+=dt*f*Number(b.cfg.rate||1);
+  if(b.acc<1)return;
+  const v=DIRS[b.dir||"E"];
+  if(emitAt(b.x+v.x,b.y+v.y,b.cfg.item,opposite(b.dir||"E"))){
+    b.acc-=1;b.outN++;
+  }else if(b.acc>4)b.acc=4;
+}
+function pumpTick(b,dt){
+  const f=netFactor(b);
+  if(f<=0)return;
+  b.acc+=dt*f*Number(b.cfg.rate||0.5);
+  if(b.acc<1)return;
+  const v=DIRS[b.dir||"E"];
+  if(emitFluidAt(b.x+v.x,b.y+v.y,b.cfg.fluid,opposite(b.dir||"E"))){
+    b.acc-=1;b.outN++;
+  }else if(b.acc>4)b.acc=4;
+}
+/* =========================================================
+   ОБРАБАТЫВАЮЩИЕ СТУПЕНИ
+========================================================= */
+function hasInputs(b,r){
+  for(const s of r.ins)if(itemCount(b.q,s.i)<s.c)return false;
+  if(r.fin&&b.fq.filter(f=>f===r.fin.f).length<r.fin.a)return false;
+  return true;
+}
+function takeInputs(b,r){
+  for(const s of r.ins){
+    for(let i=0;i<s.c;i++){
+      const idx=b.q.indexOf(s.i);
+      if(idx>=0)b.q.splice(idx,1);
+    }
+  }
+  if(r.fin){
+    for(let i=0;i<r.fin.a;i++){
+      const idx=b.fq.indexOf(r.fin.f);
+      if(idx>=0)b.fq.splice(idx,1);
+    }
+  }
+}
+function flushOut(b){
+  const d=BLOCKS[b.type];
+  while(b.buf.length){
+    const dd=DIRS[b.dir||"E"];
+    if(emitAt(b.x+dd.x,b.y+dd.y,b.buf[0],opposite(b.dir||"E"))){
+      b.buf.shift();b.outN++;
+    }else break;
+  }
+}
+function machineTick(b,dt){
+  const f=netFactor(b);
+  const d=BLOCKS[b.type];
+  if(f>0&&b.work>0){
+    b.work-=dt*f;
+    if(b.work<=0){
+      b.work=0;
+      const r=recipeOf(b);
+      if(r)for(const o of r.outs)for(let i=0;i<o.c;i++)b.buf.push(o.i);
+    }
+  }
+  if(f>0&&b.work<=0){
+    const r=recipeOf(b);
+    if(r&&hasInputs(b,r)){takeInputs(b,r);b.work=Math.max(0.2,r.dur);}
+  }
+  if(f>0&&d.outs!==true)flushOut(b);
+}
+function splitterTick(b){
+  const outs=b.cfg.outs||[];
+  if(!outs.length||!b.buf.length)return;
+  let start=Number(b.cfg.last)||0;
+  for(let n=0;n<outs.length;n++){
+    const i=(start+n)%outs.length;
+    const o=outs[i];
+    if(o.f&&o.f.length&&o.f.indexOf(b.buf[0])<0)continue;
+    const v=DIRS[o.d];
+    if(emitAt(b.x+v.x,b.y+v.y,b.buf[0],opposite(o.d))){
+      b.buf.shift();b.cfg.last=(i+1)%outs.length;b.outN++;
+      return;
+    }
+  }
+}
+function ejectorTick(b){
+  if(!b.buf.length)return;
+  const v=DIRS[b.dir||"E"];
+  if(emitAt(b.x+v.x*3,b.y+v.y*3,b.buf[0],b.dir||"E")){
+    b.buf.shift();b.outN++;
+  }
+}
+/* =========================================================
+   ГЛАВНЫЙ ШАГ
+========================================================= */
+function step(dt){
+  const blocks=Object.values(state.blocks);
+  for(const b of blocks){
+    const d=BLOCKS[b.type];
+    if(d.source)sourceTick(b,dt);
+    if(b.type==="fluid_pump")pumpTick(b,dt);
+    if(d.recipes)machineTick(b,dt);
+    if(b.type==="splitter")splitterTick(b);
+    if(b.type==="ejector")ejectorTick(b);
+  }
+  moveItems(dt);
+  moveFluids(dt);
+}
+</script>
+<script>
+"use strict";
+/* =========================================================
+   РЕНДЕР
+========================================================= */
+const cv=document.getElementById("cv");
+const ctx=cv.getContext("2d");
+let DPR=window.devicePixelRatio||1;
+let animT=0;
+
+function resize(){
+  const wrap=cv.parentElement;
+  DPR=window.devicePixelRatio||1;
+  cv.width=Math.max(1,Math.floor(wrap.clientWidth*DPR));
+  cv.height=Math.max(1,Math.floor(wrap.clientHeight*DPR));
+  cv.style.width=wrap.clientWidth+"px";
+  cv.style.height=wrap.clientHeight+"px";
+}
+window.addEventListener("resize",resize);
+
+function worldToScreen(wx,wy){
+  return {x:(wx-state.cam.x)*state.cam.z,y:(wy-state.cam.y)*state.cam.z};
+}
+function screenToWorld(sx,sy){
+  return {x:sx/state.cam.z+state.cam.x,y:sy/state.cam.z+state.cam.y};
+}
+function mouseCell(sx,sy){
+  const w=screenToWorld(sx,sy);
+  return {x:Math.floor(w.x/CS),y:Math.floor(w.y/CS)};
+}
+
+function roundRect(x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);
+  ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);
+  ctx.arcTo(x,y,x+w,y,r);
+  ctx.closePath();
+}
+function drawArrow(cx,cy,dir,size,color){
+  ctx.save();ctx.translate(cx,cy);
+  const rot={E:0,S:Math.PI/2,W:Math.PI,N:-Math.PI/2}[dir];
+  ctx.rotate(rot);
+  ctx.fillStyle=color;
+  ctx.beginPath();
+  ctx.moveTo(size,0);ctx.lineTo(-size*0.5,size*0.7);
+  ctx.lineTo(-size*0.5,-size*0.7);ctx.closePath();ctx.fill();
+  ctx.restore();
+}
+
+function drawGrid(w,h){
+  const z=state.cam.z;
+  const x0=Math.floor(state.cam.x/CS)*CS;
+  const y0=Math.floor(state.cam.y/CS)*CS;
+  ctx.lineWidth=1;
+  for(let gx=x0;gx<state.cam.x+w/z;gx+=CS){
+    const sx=(gx-state.cam.x)*z;
+    ctx.strokeStyle=(gx%(CS*4)===0)?"#262c33":"#1a1e23";
+    ctx.beginPath();ctx.moveTo(sx,0);ctx.lineTo(sx,h);ctx.stroke();
+  }
+  for(let gy=y0;gy<state.cam.y+h/z;gy+=CS){
+    const sy=(gy-state.cam.y)*z;
+    ctx.strokeStyle=(gy%(CS*4)===0)?"#262c33":"#1a1e23";
+    ctx.beginPath();ctx.moveTo(0,sy);ctx.lineTo(w,sy);ctx.stroke();
+  }
+}
+
+function netColor(idx){
+  const pal=["#4a90c0","#c07a4a","#5aa05a","#9a6ac0","#c0a04a","#4ac0b0","#c05a7a","#8a8a5a"];
+  return pal[idx%pal.length];
+}
+
+function drawBlock(b,px,py,s){
+  const d=BLOCKS[b.type];
+  const pad=3*s;
+  const x=px+pad,y=py+pad,w=CS*s-pad*2,h=CS*s-pad*2;
+
+  /* фон клетки */
+  roundRect(x,y,w,h,5*s);
+  ctx.fillStyle=d.color;
+  ctx.fill();
+  ctx.strokeStyle="#00000066";ctx.lineWidth=1*s;ctx.stroke();
+
+  /* подсветка перегрузки сети */
+  if(state.showPower&&b.net!=null){
+    const net=state.nets[b.net];
+    if(net&&!net.ok&&net.cap>0){
+      ctx.strokeStyle="#ff5a5a";ctx.lineWidth=2.5*s;roundRect(x,y,w,h,5*s);ctx.stroke();
+    }else{
+      ctx.strokeStyle=netColor(b.net);ctx.lineWidth=1.5*s;roundRect(x,y,w,h,5*s);ctx.stroke();
+    }
+  }
+
+  /* лента */
+  if(b.type==="belt"){
+    ctx.fillStyle="#2f343a";
+    roundRect(x,y,w,h,5*s);ctx.fill();
+    const v=DIRS[b.dir]||DIRS.E;
+    const horizontal=Math.abs(v.x)>0;
+    const dash=(animT*24*(state.sim.running?state.sim.speed:0))%(CS*s);
+    ctx.save();
+    ctx.strokeStyle="#d9a52066";ctx.lineWidth=2*s;
+    ctx.setLineDash([6*s,8*s]);
+    ctx.lineDashOffset=-dash*(horizontal?(v.x>0?1:-1):(v.y>0?1:-1));
+    ctx.beginPath();
+    if(horizontal){ctx.moveTo(x,y+h/2);ctx.lineTo(x+w,y+h/2);}
+    else{ctx.moveTo(x+w/2,y);ctx.lineTo(x+w/2,y+h);}
+    ctx.stroke();
+    ctx.restore();
+    drawArrow(x+w/2,y+h/2,b.dir,6*s,"#d9a520");
+    ctx.strokeStyle="#00000055";ctx.lineWidth=1*s;
+    roundRect(x,y,w,h,5*s);ctx.stroke();
+    return;
+  }
+
+  /* трубы */
+  if(b.type==="fluid_pipe"||b.type==="fluid_tank"){
+    ctx.fillStyle="#2b3a4a";roundRect(x,y,w,h,5*s);ctx.fill();
+    const v=DIRS[b.dir]||DIRS.E;
+    ctx.strokeStyle="#5a9ad0";ctx.lineWidth=5*s;
+    ctx.beginPath();
+    ctx.moveTo(x+w/2-v.x*w/2,y+h/2-v.y*h/2);
+    ctx.lineTo(x+w/2+v.x*w/2,y+h/2+v.y*h/2);
+    ctx.stroke();
+    ctx.fillStyle="#8ab4e0";ctx.font=`${10*s}px sans-serif`;ctx.textAlign="center";ctx.textBaseline="middle";
+    ctx.fillText("≈",x+w/2,y+h/2);
+    return;
+  }
+
+  /* вал / шестерни */
+  if(b.type==="shaft"||b.type==="cog"||b.type==="large_cog"||b.type==="gearbox"){
+    ctx.fillStyle="#22262b";roundRect(x,y,w,h,5*s);ctx.fill();
+    const cx=x+w/2,cy=y+h/2;
+    const spin=animT*(state.sim.running?1.5:0)*(state.autoPower?1:1);
+    if(b.type==="shaft"){
+      ctx.save();ctx.translate(cx,cy);ctx.rotate(spin);
+      ctx.strokeStyle="#cfd4d8";ctx.lineWidth=4*s;
+      ctx.beginPath();ctx.moveTo(-w*0.32,0);ctx.lineTo(w*0.32,0);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(0,-h*0.32);ctx.lineTo(0,h*0.32);ctx.stroke();
+      ctx.restore();
+    }else if(b.type==="gearbox"){
+      drawArrow(cx,cy,b.dir||"E",7*s,"#cfd4d8");
+    }else{
+      const r=b.type==="large_cog"?w*0.4:w*0.3;
+      ctx.save();ctx.translate(cx,cy);ctx.rotate(spin*(b.type==="large_cog"?0.6:1));
+      ctx.fillStyle=d.color;
+      const teeth=b.type==="large_cog"?12:8;
+      for(let i=0;i<teeth;i++){
+        const a=i/teeth*Math.PI*2;
+        ctx.save();ctx.rotate(a);
+        ctx.fillRect(r-2*s,-2.5*s,6*s,5*s);
+        ctx.restore();
+      }
+      ctx.beginPath();ctx.arc(0,0,r,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle="#22262b";ctx.beginPath();ctx.arc(0,0,r*0.35,0,Math.PI*2);ctx.fill();
+      ctx.restore();
+    }
+    return;
+  }
+
+  /* значок + название */
+  const emoji=d.e||iconFor(b.type);
+  ctx.font=`${18*s}px "Segoe UI Emoji", sans-serif`;
+  ctx.textAlign="center";ctx.textBaseline="middle";
+  ctx.fillText(emoji,x+w/2,y+h*0.42);
+
+  ctx.font=`${7.5*s}px "Segoe UI", sans-serif`;
+  ctx.fillStyle="#ffffffcc";
+  ctx.fillText(shortName(b.type),x+w/2,y+h-8*s);
+
+  /* индикатор направления */
+  if(d.dir){
+    const v=DIRS[b.dir]||DIRS.E;
+    drawArrow(x+w/2+v.x*w*0.36,y+h/2+v.y*h*0.36,b.dir,5*s,"#ffffffbb");
+  }
+
+  /* прогресс обработки */
+  if(d.recipes&&b.work>0){
+    const r=recipeOf(b);
+    const total=r?r.dur:1;
+    const pr=clamp(1-b.work/Math.max(0.2,total),0,1);
+    ctx.fillStyle="#00000088";ctx.fillRect(x,y+h-4*s,w,4*s);
+    ctx.fillStyle="#d9a520";ctx.fillRect(x,y+h-4*s,w*pr,4*s);
+  }
+  /* очередь */
+  if((b.q&&b.q.length)||(b.buf&&b.buf.length)){
+    ctx.fillStyle="#111111aa";
+    ctx.beginPath();ctx.arc(x+w-7*s,y+7*s,7*s,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle="#ffd";ctx.font=`${8*s}px sans-serif`;
+    ctx.fillText(String((b.q?b.q.length:0)+(b.buf?b.buf.length:0)),x+w-7*s,y+7*s);
+  }
+}
+function iconFor(type){
+  const map={chest:"📦",sink:"📥",void_box:"🕳️",spout:"🚿",fluid_pump:"⛲",
+    steam_engine:"🚂",water_wheel:"🎡",creative_motor:"💫",electric_motor:"⚡",
+    ejector:"🚀",splitter:"⑂",funnel:"🔻",chute:"⬇️",smart_chute:"📥",
+    crusher:"💥",press:"🔨",mixer:"🌀",millstone:"⛰️",crafter:"🧩",
+    saw:"🪚",drill:"⛏️",deployer:"🖐️",fan:"💨"};
+  return map[type]||"⬛";
+}
+function shortName(type){
+  const n=BLOCKS[type].n;
+  return n.length>11?n.slice(0,10)+"…":n;
+}
+
+function drawItems(s){
+  for(const o of state.items){
+    const it=ITEMS[o.i];if(!it)continue;
+    const px=(o.cx*CS+CS/2-o.p*(DIRS[o.dirIn]?DIRS[o.dirIn].x:0)*CS)*s-(state.cam.x*s);
+    const py=(o.cy*CS+CS/2-o.p*(DIRS[o.dirIn]?DIRS[o.dirIn].y:0)*CS)*s-(state.cam.y*s);
+    const r=8*s;
+    ctx.beginPath();ctx.arc(px,py,r,0,Math.PI*2);
+    ctx.fillStyle=it.c;ctx.fill();
+    ctx.strokeStyle="#000000aa";ctx.lineWidth=1.5*s;ctx.stroke();
+    ctx.font=`${10*s}px "Segoe UI Emoji",sans-serif`;
+    ctx.textAlign="center";ctx.textBaseline="middle";
+    ctx.fillText(it.e,px,py+0.5*s);
+  }
+  for(const o of state.fluids){
+    const fl=FLUIDS[o.f];if(!fl)continue;
+    const px=(o.cx*CS+CS/2-o.p*(DIRS[o.dirIn]?DIRS[o.dirIn].x:0)*CS)*s-(state.cam.x*s);
+    const py=(o.cy*CS+CS/2-o.p*(DIRS[o.dirIn]?DIRS[o.dirIn].y:0)*CS)*s-(state.cam.y*s);
+    ctx.beginPath();ctx.arc(px,py,7*s,0,Math.PI*2);
+    ctx.fillStyle=fl.c;ctx.fill();
+    ctx.strokeStyle="#ffffff66";ctx.lineWidth=1*s;ctx.stroke();
+  }
+}
+
+/* метки «вход → выход» над ступенями */
+function drawLabels(s){
+  if(!state.showLabels)return;
+  for(const b of Object.values(state.blocks)){
+    const d=BLOCKS[b.type];
+    if(!d.recipes||!d.source===false&&false)continue;
+    if(!d.recipes)continue;
+    const r=recipeOf(b);
+    if(!r)continue;
+    const cx=(b.x*CS+CS/2-state.cam.x)*s;
+    const cy=(b.y*CS-6-state.cam.y)*s;
+    if(cy<0)continue;
+    const ins=r.ins.map(x=>ITEMS[x.i]?ITEMS[x.i].e+"×"+x.c:"").join(" ");
+    const fl=r.fin&&FLUIDS[r.fin.f]?"💧"+FLUIDS[r.fin.f].n+" ":"";
+    const outs=r.outs.map(x=>ITEMS[x.i]?ITEMS[x.i].e+"×"+x.c:"").join(" ");
+    const txt=(ins+fl).trim()+" → "+(outs.trim()||"?");
+    ctx.font=`${8.5*s}px "Segoe UI",sans-serif`;
+    const w=ctx.measureText(txt).width+10*s;
+    ctx.fillStyle="#10131add";
+    roundRect(cx-w/2,cy-10*s,w,13*s,4*s);ctx.fill();
+    ctx.fillStyle="#e8d8a0";ctx.textAlign="center";ctx.textBaseline="middle";
+    ctx.fillText(txt,cx,cy-3.5*s);
+  }
+  /* источники и приёмники */
+  for(const b of Object.values(state.blocks)){
+    const d=BLOCKS[b.type];
+    if(!d.source&&!d.sink)continue;
+    const cx=(b.x*CS+CS/2-state.cam.x)*s;
+    const cy=(b.y*CS-6-state.cam.y)*s;
+    if(cy<0)continue;
+    let txt;
+    if(d.source)txt=(ITEMS[b.cfg.item]?ITEMS[b.cfg.item].e+" "+ITEMS[b.cfg.item].n:"?")+" ×"+Number(b.cfg.rate||1)+"/с";
+    else if(d.void)txt="удаление";
+    else{
+      const keys=Object.keys(state.stats.produced);
+      const total=keys.reduce((a,x)=>a+state.stats.produced[x],0);
+      txt="выдано: "+total;
+    }
+    ctx.font=`${8.5*s}px "Segoe UI",sans-serif`;
+    const w=ctx.measureText(txt).width+10*s;
+    ctx.fillStyle="#10131add";
+    roundRect(cx-w/2,cy-10*s,w,13*s,4*s);ctx.fill();
+    ctx.fillStyle=d.source?"#a8e0a8":"#a8c8e8";ctx.textAlign="center";ctx.textBaseline="middle";
+    ctx.fillText(txt,cx,cy-3.5*s);
+  }
+}
+
+function render(now){
+  animT=now;
+  const w=cv.width,h=cv.height;
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.fillStyle="#0e1114";
+  ctx.fillRect(0,0,w,h);
+  const z=state.cam.z;
+  const wCss=w/DPR,hCss=h/DPR;
+  ctx.setTransform(DPR*z,0,0,DPR*z,-state.cam.x*DPR*z,-state.cam.y*DPR*z);
+  drawGrid(wCss,hCss);
+
+  const keys=Object.keys(state.blocks).sort((a,b)=>{
+    const A=state.blocks[a],B=state.blocks[b];
+    return A.y-B.y||A.x-B.x;
+  });
+  for(const key of keys)drawBlock(state.blocks[key],state.blocks[key].x*CS,state.blocks[key].y*CS,z);
+
+  drawItems(z);
+  drawLabels(z);
+
+  /* выделение и наведение */
+  const hl=(cell,color,lw)=>{
+    if(!cell)return;
+    ctx.strokeStyle=color;ctx.lineWidth=lw;
+    ctx.strokeRect(cell.x*CS+1,cell.y*CS+1,CS-2,CS-2);
+  };
+  if(state.hover)hl(state.hover,"#ffffff55",1.5);
+  if(state.sel)hl(state.sel,"#d9a520",2);
+
+  /* область рисования ленты */
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+</script>
+<script>
+"use strict";
+/* =========================================================
+   ПАЛИТРА
+========================================================= */
+function buildPalette(){
+  const root=document.getElementById("paletteList");
+  root.innerHTML="";
+  for(const [cat,name] of CATS){
+    const types=Object.keys(BLOCKS).filter(t=>BLOCKS[t].cat===cat);
+    if(!types.length)continue;
+    const wrap=document.createElement("div");
+    wrap.className="cat"+(cat==="transport"?" open":"");
+    const head=document.createElement("div");
+    head.className="cat-head";
+    head.innerHTML='<span class="arr">▼</span> '+esc(name);
+    head.onclick=()=>wrap.classList.toggle("open");
+    const items=document.createElement("div");
+    items.className="cat-items";
+    for(const t of types){
+      const d=BLOCKS[t];
+      const el=document.createElement("div");
+      el.className="pitem";
+      el.dataset.type=t;
+      el.title=d.help||"";
+      el.innerHTML='<span class="ic">'+(d.e||iconFor(t))+'</span>'+esc(d.n);
+      el.onclick=()=>selectPaint(t);
+      items.appendChild(el);
+    }
+    wrap.appendChild(head);wrap.appendChild(items);
+    root.appendChild(wrap);
+  }
+}
+function selectPaint(type){
+  state.paintType=type;
+  setTool("block");
+  document.querySelectorAll(".pitem").forEach(e=>
+    e.classList.toggle("active",e.dataset.type===type));
+}
+const TOOL_NAMES={select:"выделение",belt:"лента",block:"блок",erase:"ластик",pan:"панорама"};
+function setTool(t){
+  state.tool=t;
+  document.querySelectorAll("[data-tool]").forEach(b=>
+    b.classList.toggle("active",b.dataset.tool===t));
+  cv.style.cursor=t==="pan"?"grab":t==="erase"?"not-allowed":"crosshair";
+  document.getElementById("stTool").textContent="Инструмент: "+TOOL_NAMES[t];
+}
+/* =========================================================
+   ИНСПЕКТОР
+========================================================= */
+function itemSelect(value,cls){
+  let html='<select class="'+(cls||"")+'">';
+  html+='<option value="">— не выбрано —</option>';
+  for(const i of ITEM_LIST)
+    html+='<option value="'+i+'"'+(i===value?' selected':'')+'>'+
+      ITEMS[i].e+" "+esc(ITEMS[i].n)+'</option>';
+  return html+"</select>";
+}
+function fluidSelect(value,allowNone){
+  let html="<select>";
+  if(allowNone)html+='<option value="">— нет жидкости —</option>';
+  for(const f of FLUID_LIST)
+    html+='<option value="'+f+'"'+(f===value?' selected':'')+'>'+esc(FLUIDS[f].n)+'</option>';
+  return html+"</select>";
+}
+function renderProps(){
+  const box=document.getElementById("tab-props");
+  const s=state.sel;
+  if(!s||!state.blocks[k(s.x,s.y)]){
+    box.innerHTML='<div class="hint" style="padding:14px 4px">'+
+      'Выберите блок на схеме (инструмент «Выделение»), чтобы настроить его: '+
+      'рецепт, предмет на входе и выходе, фильтры, направление, энергию.<br><br>'+
+      'Или выберите блок в палитре слева и поставьте его на сетку.</div>';
+    return;
+  }
+  const b=state.blocks[k(s.x,s.y)];
+  const d=BLOCKS[b.type];
+  let html="";
+  html+='<div class="field"><label>Блок</label><b style="color:var(--brass)">'+
+    (d.e||iconFor(b.type))+" "+esc(d.n)+'</b> <span class="hint">('+b.x+", "+b.y+")</span></div>";
+  if(d.help)html+='<div class="hint" style="margin-bottom:10px">'+esc(d.help)+"</div>";
+
+  if(d.dir){
+    html+='<div class="field"><label>Направление выхода</label><div class="row" id="dirRow">';
+    for(const dd of DIR_ORDER)
+      html+='<button data-dir="'+dd+'" class="'+(b.dir===dd?"active":"")+'">'+
+        DIR_LETTER[dd]+" "+dd+"</button>";
+    html+="</div></div>";
+  }
+
+  if(d.source){
+    html+='<div class="field"><label>Предмет-источник</label><div class="row">'+
+      '<span style="font-size:18px">'+(ITEMS[b.cfg.item]?ITEMS[b.cfg.item].e:"")+'</span>'+
+      itemSelect(b.cfg.item,"sel-item")+'</div></div>';
+    html+='<div class="field"><label>Скорость, предметов в секунду</label>'+
+      '<input type="number" class="sel-rate" min="0.1" max="16" step="0.5" value="'+
+      Number(b.cfg.rate||1)+'"></div>';
+  }
+  if(d.filter){
+    html+='<div class="field"><label>Фильтр предметов (пусто = всё)</label><div class="row" id="filterRow">';
+    for(const f of b.cfg.filter||[])
+      html+='<span class="chip">'+(ITEMS[f]?ITEMS[f].e+" "+esc(ITEMS[f].n):f)+
+        '<button data-rm="'+f+'">×</button></span>';
+    html+='<select id="filterAdd"><option value="">+ добавить…</option>';
+    for(const i of ITEM_LIST)html+='<option value="'+i+'">'+ITEMS[i].e+" "+esc(ITEMS[i].n)+"</option>";
+    html+='</select></div></div>';
+  }
+  if(d.outs){
+    html+='<div class="field"><label>Выходы (направление + фильтр)</label>';
+    b.cfg.outs.forEach((o,idx)=>{
+      html+='<div class="row" style="margin-bottom:5px"><b class="hint">Выход '+(idx+1)+"</b>"+
+        '<select data-out-dir="'+idx+'">'+
+        DIR_ORDER.map(dd=>'<option value="'+dd+'"'+(o.d===dd?" selected":"")+">"+
+          DIR_LETTER[dd]+"</option>").join("")+"</select>"+
+        '<select data-out-f="'+idx+'"><option value="">любой</option>'+
+        ITEM_LIST.map(i=>'<option value="'+i+'"'+(o.f.indexOf(i)>=0?" selected":"")+">"+
+          ITEMS[i].e+" "+esc(ITEMS[i].n)+"</option>").join("")+"</select></div>";
+    });
+    html+='<div class="hint">Фильтр выхода — один предмет (или «любой»).</div></div>';
+  }
+  if(b.type==="fluid_pump"){
+    html+='<div class="field"><label>Жидкость</label>'+fluidSelect(b.cfg.fluid)+"</div>";
+    html+='<div class="field"><label>Производительность, мВ/с</label>'+
+      '<input type="number" class="sel-prate" min="0.1" max="8" step="0.1" value="'+
+      Number(b.cfg.rate||0.5)+'"></div>';
+  }
+  if(b.type==="creative_motor"){
+    html+='<div class="field"><label>RPM: <b id="rpmVal">'+Number(b.cfg.rpm||128)+
+      '</b></label><input type="range" class="sel-rpm" min="16" max="256" step="16" value="'+
+      Number(b.cfg.rpm||128)+'" style="width:100%"></div>';
+  }
+  if(d.recipes){
+    const list=RECIPES[d.recipes]||[];
+    html+='<div class="field"><label>Рецепт (вход → выход ступени)</label><select class="sel-recipe">';
+    for(const r of list)
+      html+='<option value="'+r.id+'"'+(b.cfg.recipe===r.id?" selected":"")+">"+
+        esc(recipeText(r))+"</option>";
+    if(b.cfg.recipe==="CUSTOM"&&b.cfg.custom)
+      html+='<option value="CUSTOM" selected>⚙ Свой рецепт</option>';
+    else html+='<option value="CUSTOM">⚙ Свой рецепт…</option>';
+    html+="</select></div>";
+    const r=recipeOf(b);
+    if(r){
+      html+='<div style="background:#171b20;border:1px solid var(--line);border-radius:6px;padding:8px;margin-bottom:9px">';
+      html+='<div class="kv"><span>Вход</span><b>'+ioText(r.ins,r.fin)+"</b></div>";
+      html+='<div class="kv"><span>Выход</span><b>'+ioText(r.outs,null)+"</b></div>";
+      html+='<div class="kv"><span>Время</span><b>'+r.dur+" с</b></div>";
+      html+='</div>';
+    }
+    if(b.cfg.recipe==="CUSTOM")html+=customRecipeForm(b);
+  }
+  if(d.recipes||b.type==="ejector"||b.type==="splitter"||d.source){
+    html+='<h4>Счётчики</h4>';
+    html+='<div class="kv"><span>Принято (вход)</span><b id="cntIn">'+b.inN+"</b></div>";
+    html+='<div class="kv"><span>Выдано (выход)</span><b id="cntOut">'+b.outN+"</b></div>";
+    html+='<div class="kv"><span>В очереди</span><b id="qIn" style="font-size:15px">'+
+      queueText(b)+"</b></div>";
+  }
+  const net=netInfo(b);
+  if(d.conducts&&net){
+    html+='<h4>Сеть питания</h4>';
+    html+='<div class="kv"><span>Нагрузка</span><b>'+net.load+" SU</b></div>";
+    html+='<div class="kv"><span>Ёмкость</span><b>'+(net.cap>1e6?"∞":net.cap)+" SU</b></div>";
+    html+='<div class="kv"><span>RPM</span><b>'+(net.rpm||"—")+"</b></div>";
+    html+='<div class="kv"><span>Статус</span><b>'+netBadge(net)+"</b></div>";
+  }
+  html+='<div style="margin-top:14px" class="row">'+
+    '<button id="btnRot">↻ Повернуть (R)</button>'+
+    '<button id="btnDel" class="danger">✕ Удалить (Del)</button></div>';
+  box.innerHTML=html;
+  bindProps(b);
+}
+function netBadge(net){
+  if(net.cap>0&&!net.ok)return '<span class="badge bad">перегружена!</span>';
+  if(net.cap===0)return '<span class="badge warn">нет источника</span>';
+  return '<span class="badge ok">норма</span>';
+}
+function recipeText(r){
+  return ioText(r.ins,r.fin)+" → "+ioText(r.outs,null);
+}
+function ioText(list,fin){
+  let parts=(list||[]).map(s=>(ITEMS[s.i]?ITEMS[s.i].e+" ":"")+ITEMS[s.i].n+
+    (s.c>1?" ×"+s.c:""));
+  if(fin&&FLUIDS[fin.f])parts.push("💧 "+FLUIDS[fin.f].n+(fin.a>1?" ×"+fin.a:""));
+  return parts.length?esc(parts.join(" + ")):'<span class="hint">—</span>';
+}
+function queueText(b){
+  const parts=[];
+  const qShow=(b.q||[]).slice(0,8);
+  for(const i of qShow)parts.push(ITEMS[i]?ITEMS[i].e:"?");
+  if((b.q||[]).length>8)parts.push("+"+(b.q.length-8));
+  for(const f of (b.fq||[]).slice(0,4))parts.push(FLUIDS[f]?"💧":"");
+  for(const i of (b.buf||[]).slice(0,6))parts.push((ITEMS[i]?ITEMS[i].e:"?")+"→");
+  return parts.length?parts.join(" "):'<span class="hint">пусто</span>';
+}
+function customRecipeForm(b){
+  const c=b.cfg.custom||(b.cfg.custom={ins:[{i:"iron_ingot",c:1}],outs:[{i:"iron_sheet",c:1}],dur:2,fin:""});
+  let html='<div style="background:#171b20;border:1px solid var(--line);border-radius:6px;padding:8px">';
+  html+='<div class="field"><label>Вход 1</label><div class="row">'+itemSelect(c.ins[0].i,"c-in0")+
+    '<input type="number" class="c-inc0" min="1" max="16" value="'+c.ins[0].c+'"></div></div>';
+  html+='<div class="field"><label>Вход 2 (необязательно)</label><div class="row">'+
+    itemSelect(c.ins[1]?c.ins[1].i:"","c-in1")+
+    '<input type="number" class="c-inc1" min="0" max="16" value="'+(c.ins[1]?c.ins[1].c:0)+'"></div></div>';
+  html+='<div class="field"><label>Жидкость (необязательно)</label>'+fluidSelect(c.fin||"",true)+
+    "</div>";
+  html+='<div class="field"><label>Выход</label><div class="row">'+itemSelect(c.outs[0].i,"c-out0")+
+    '<input type="number" class="c-outc0" min="1" max="64" value="'+c.outs[0].c+'"></div></div>';
+  html+='<div class="field"><label>Время обработки, с</label><input type="number" class="c-dur" min="0.2" max="60" step="0.5" value="'+c.dur+'"></div>';
+  html+="</div>";
+  return html;
+}
+function bindProps(b){
+  const box=document.getElementById("tab-props");
+  box.querySelectorAll("#dirRow button").forEach(btn=>{
+    btn.onclick=()=>{b.dir=btn.dataset.dir;renderProps();touch();};
+  });
+  const si=box.querySelector(".sel-item");
+  if(si)si.onchange=()=>{b.cfg.item=si.value;touch();};
+  const sr=box.querySelector(".sel-rate");
+  if(sr)sr.onchange=()=>{b.cfg.rate=Number(sr.value)||1;touch();};
+  const fa=box.querySelector("#filterAdd");
+  if(fa)fa.onchange=()=>{
+    if(fa.value&&!b.cfg.filter.includes(fa.value))b.cfg.filter.push(fa.value);
+    renderProps();touch();
+  };
+  box.querySelectorAll("[data-rm]").forEach(btn=>{
+    btn.onclick=()=>{
+      b.cfg.filter=b.cfg.filter.filter(x=>x!==btn.dataset.rm);
+      renderProps();touch();
+    };
+  });
+  box.querySelectorAll("[data-out-dir]").forEach(sel=>{
+    sel.onchange=()=>{b.cfg.outs[Number(sel.dataset.outDir)].d=sel.value;touch();};
+  });
+  box.querySelectorAll("[data-out-f]").forEach(sel=>{
+    sel.onchange=()=>{
+      b.cfg.outs[Number(sel.dataset.outF)].f=sel.value?[sel.value]:[];
+      touch();
+    };
+  });
+  const sp=box.querySelector(".sel-prate");
+  if(sp)sp.onchange=()=>{b.cfg.rate=Number(sp.value)||0.5;touch();};
+  const fl=box.querySelectorAll("select");
+  if(b.type==="fluid_pump"&&fl.length){
+    const fsel=fl[0];
+    fsel.onchange=()=>{b.cfg.fluid=fsel.value;touch();};
+  }
+  const rpm=box.querySelector(".sel-rpm");
+  if(rpm){
+    rpm.oninput=()=>{
+      b.cfg.rpm=Number(rpm.value);
+      const lab=box.querySelector("#rpmVal");
+      if(lab)lab.textContent=b.cfg.rpm;
+      touch();
+    };
+  }
+  const rc=box.querySelector(".sel-recipe");
+  if(rc)rc.onchange=()=>{
+    b.cfg.recipe=rc.value;
+    if(rc.value==="CUSTOM"&&!b.cfg.custom)
+      b.cfg.custom={ins:[{i:"iron_ingot",c:1}],outs:[{i:"iron_sheet",c:1}],dur:2,fin:""};
+    renderProps();touch();
+  };
+  const c=b.cfg.custom;
+  if(c){
+    const g=s=>box.querySelector(s);
+    const bind=(sel,fn)=>{const e=g(sel);if(e)e.onchange=()=>{fn(e);touch();};};
+    bind(".c-in0",e=>{c.ins[0].i=e.value;});
+    bind(".c-inc0",e=>{c.ins[0].c=Number(e.value)||1;});
+    bind(".c-in1",e=>{
+      if(e.value){if(!c.ins[1])c.ins[1]={i:e.value,c:1};else c.ins[1].i=e.value;}
+      else c.ins[1]=null;
+    });
+    bind(".c-inc1",e=>{
+      const v=Number(e.value)||0;
+      if(v>0){if(!c.ins[1])c.ins[1]={i:"iron_nugget",c:v};else c.ins[1].c=v;}
+      else c.ins[1]=null;
+    });
+    bind(".c-out0",e=>{c.outs[0].i=e.value;});
+    bind(".c-outc0",e=>{c.outs[0].c=Number(e.value)||1;});
+    bind(".c-dur",e=>{c.dur=Number(e.value)||2;});
+    const fs=box.querySelectorAll("select");
+    const fluidSel=Array.from(fs).find(s=>s.options.length===FLUID_LIST.length+(c.fin?0:1)&&!s.className);
+    if(fluidSel)fluidSel.onchange=()=>{c.fin=fluidSel.value||null;};
+  }
+  const rot=box.querySelector("#btnRot");
+  if(rot)rot.onclick=()=>rotateSel();
+  const del=box.querySelector("#btnDel");
+  if(del)del.onclick=()=>{if(state.sel)removeBlock(state.sel.x,state.sel.y);renderProps();};
+}
+function updateLive(){
+  const s=state.sel;
+  if(!s)return;
+  const b=state.blocks[k(s.x,s.y)];
+  if(!b)return;
+  const box=document.getElementById("tab-props");
+  const ci=box.querySelector("#cntIn");
+  if(ci)ci.textContent=b.inN;
+  const co=box.querySelector("#cntOut");
+  if(co)co.textContent=b.outN;
+  const q=box.querySelector("#qIn");
+  if(q)q.innerHTML=queueText(b);
+}
+/* =========================================================
+   ВКЛАДКА «ЛИНИЯ»
+========================================================= */
+function renderLine(){
+  const box=document.getElementById("tab-line");
+  const srcs=Object.values(state.blocks).filter(b=>BLOCKS[b.type].source);
+  let html="";
+  if(!srcs.length){
+    html+='<div class="hint">Добавьте <b>Сундук-источник</b> и соедините его лентой со ступенями — '+
+      'здесь появится схема линии: что входит и что выходит на каждой ступени.</div>';
+  }else{
+    html+="<h4>Этапы линии</h4>";
+    html+="<table><tr><th>#</th><th>Ступень</th><th>Вход</th><th>Выход</th><th>Статус</th></tr>";
+    let idx=0;
+    for(const src of srcs){
+      html+='<tr style="background:#1a2028"><td>'+(++idx)+"</td><td>📦 "+esc(BLOCKS[src.type].n)+
+        ' <span class="hint">('+src.x+", "+src.y+')</span></td><td colspan="2" class="hint">'+
+        esc(ITEMS[src.cfg.item]?ITEMS[src.cfg.item].n:"?")+" ×"+Number(src.cfg.rate||1)+"/с</td>"+
+        "<td>"+src.outN+" выдано</td></tr>";
+      const visited={};let cur=src;let guard=0;
+      while(cur&&guard++<60){
+        const path=walkForward(cur,visited);
+        if(!path)break;
+        for(const st of path.stages){
+          html+=stageRow(st,++idx);
+        }
+        cur=path.end;
+      }
+    }
+    const used={};
+    for(const src of srcs){
+      let cur=src,guard=0;
+      while(cur&&guard++<60){
+        const p=walkForward(cur,used);
+        if(!p)break;
+        for(const st of p.stages)used[k(st.x,st.y)]=true;
+        used[k(cur.x,cur.y)]=true;
+        cur=p.end;
+      }
+    }
+    const orphans=Object.values(state.blocks).filter(b=>
+      (BLOCKS[b.type].recipes||b.type==="ejector"||b.type==="splitter")&&!used[k(b.x,b.y)]);
+    if(orphans.length){
+      html+="<h4>Не подключено к линии</h4>";
+      for(const b of orphans)html+=stageRow(b,++idx,true);
+    }
+  }
+  html+="<h4>Итоги</h4>";
+  const keys=Object.keys(state.stats.produced);
+  if(keys.length){
+    html+="<table><tr><th>Предмет</th><th>Произведено</th></tr>";
+    for(const i of keys)
+      html+="<tr><td>"+(ITEMS[i]?ITEMS[i].e+" "+esc(ITEMS[i].n):esc(i))+
+        "</td><td><b>"+state.stats.produced[i]+"</b></td></tr>";
+    html+="</table>";
+  }else html+='<div class="hint">Приёмники ещё ничего не выдали — нажмите ▶ Пуск.</div>';
+  if(state.stats.lost)
+    html+='<div class="hint" style="color:#ffb060;margin-top:6px">Потеряно в пустоте: '+
+      state.stats.lost+"</div>";
+  html+="<h4>Сети питания</h4>";
+  if(!state.nets.length)html+='<div class="hint">Блоков нет.</div>';
+  else{
+    let hasPower=false;
+    html+="<table><tr><th>Сеть</th><th>SU</th><th>RPM</th><th>Статус</th></tr>";
+    state.nets.forEach((n,i)=>{
+      if(n.cap>0)hasPower=true;
+      html+="<tr><td>"+(i+1)+" ("+n.comp.length+" бл.)</td><td>"+n.load+" / "+
+        (n.cap>1e6?"∞":n.cap)+"</td><td>"+(n.rpm||"—")+"</td><td>"+netBadge(n)+"</td></tr>";
+    });
+    html+="</table>";
+    if(!hasPower&&!state.autoPower)
+      html+='<div class="hint" style="color:#ffb060;margin-top:6px">Нет источников энергии. '+
+        'Добавьте двигатель или включите «Автопитание».</div>';
+  }
+  box.innerHTML=html;
+}
+function stageRow(b,idx,muted){
+  const d=BLOCKS[b.type];
+  const r=d.recipes?recipeOf(b):null;
+  let inp="",outp="";
+  if(r){
+    inp=r.ins.map(s=>'<span class="ic">'+ITEMS[s.i].e+"</span>"+esc(ITEMS[s.i].n)+
+      (s.c>1?"×"+s.c:"")).join(" + ");
+    if(r.fin)inp+=' + 💧'+esc(FLUIDS[r.fin.f].n);
+    outp=r.outs.map(s=>'<span class="ic">'+ITEMS[s.i].e+"</span>"+esc(ITEMS[s.i].n)+
+      (s.c>1?"×"+s.c:"")).join(" + ");
+  }else if(b.type==="ejector"){inp='<span class="hint">любой</span>';outp='<span class="hint">×3 клетки</span>';}
+  else if(b.type==="splitter"){inp='<span class="hint">любой</span>';
+    outp=(b.cfg.outs||[]).map(o=>DIR_LETTER[o.d]+":"+(o.f.length&&ITEMS[o.f[0]]?ITEMS[o.f[0]].e:"★")).join(" ");}
+  const q=(b.q?b.q.length:0)+(b.buf?b.buf.length:0);
+  const net=netInfo(b);
+  let st="";
+  if(muted)st='<span class="badge warn">не подключено</span>';
+  else if(net&&net.cap>0&&!net.ok)st='<span class="badge bad">перегрузка SU</span>';
+  else st="обработано: <b>"+b.inN+"</b>"+(q?" · в очереди: "+q:"");
+  return "<tr><td>"+idx+"</td><td>"+(d.e||iconFor(b.type))+" "+esc(d.n)+
+    ' <span class="hint">('+b.x+", "+b.y+')</span></td><td class="io">'+inp+
+    '</td><td class="io">'+outp+"</td><td>"+st+"</td></tr>";
+}
+/* обход вперёд по линии от блока; visited — карта посещённых клеток */
+function walkForward(from,visited){
+  const startDir=from.dir||"E";
+  const v=DIRS[startDir];
+  let cur=state.blocks[k(from.x+v.x,from.y+v.y)];
+  const stages=[];const seen={};
+  let guard=0;
+  while(cur&&guard++<60){
+    const key=k(cur.x,cur.y);
+    if(seen[key])return {stages,end:null};
+    seen[key]=true;
+    const d=BLOCKS[cur.type];
+    if(d.recipes||cur.type==="ejector"||cur.type==="splitter"){
+      stages.push(cur);
+      if(cur.type==="splitter"||cur.type==="ejector")return {stages,end:null};
+      const vv=DIRS[cur.dir||"E"];
+      return {stages,end:state.blocks[k(cur.x+vv.x,cur.y+vv.y)]};
+    }
+    if(d.sink||d.source||!cur.dir)return {stages,end:null};
+    const vv=DIRS[cur.dir];
+    cur=state.blocks[k(cur.x+vv.x,cur.y+vv.y)];
+  }
+  return {stages,end:null};
+}
+/* =========================================================
+   ИМПОРТ / ЭКСПОРТ / ПРИМЕРЫ
+========================================================= */
+function download(name,url){
+  const a=document.createElement("a");
+  a.href=url;a.download=name;a.click();
+}
+function exportJSON(){
+  const blob=new Blob([JSON.stringify(serialize(),null,1)],{type:"application/json"});
+  download("create-liniya.json",URL.createObjectURL(blob));
+}
+function exportPNG(){
+  render(animT);
+  try{download("create-shema.png",cv.toDataURL("image/png"));}
+  catch(e){alert("Не удалось сохранить PNG"); }
+}
+function clearAll(){
+  state.blocks={};state.sel=null;
+  resetSim(true);touch();renderProps();
+}
+/* Пример: пшеница → мельница → миксер (с водой из насоса) → пресс → приёмник */
+function loadDemo(){
+  clearAll();
+  const B=(t,x,y,dir)=>placeBlock(t,x,y,dir);
+  B("chest",2,2,"E");state.blocks[k(2,2)].cfg={item:"wheat",rate:1};
+  B("belt",3,2,"E");B("belt",4,2,"E");
+  B("millstone",5,2,"S");
+  B("belt",5,3,"S");
+  B("mixer",5,4,"E");
+  state.blocks[k(5,4)].cfg.recipe="mx2";           // мука + вода → тесто
+  B("fluid_pump",5,6,"N");state.blocks[k(5,6)].cfg={fluid:"water",rate:0.5};
+  B("fluid_pipe",5,5,"N");
+  B("belt",6,4,"E");B("belt",7,4,"E");
+  B("press",8,4,"S");
+  state.blocks[k(8,4)].cfg.recipe="pr5";           // тесто → хлеб
+  B("belt",8,5,"S");
+  B("sink",8,6);
+  /* второй пример рядом: разделение латуни и железа */
+  B("chest",11,2,"E");state.blocks[k(11,2)].cfg={item:"brass_sheet",rate:0.8};
+  B("belt",12,2,"E");B("belt",13,2,"E");
+  B("splitter",14,2);
+  state.blocks[k(14,2)].cfg.outs=[
+    {d:"E",f:[]},{d:"S",f:["iron_sheet"]},{d:"W",f:[]}
+  ];
+  B("belt",15,2,"E");
+  B("sink",16,2);
+  state.cam={x:0,y:-60,z:1};
+  state.sel=null;touch();renderProps();
+}
+</script>
+<script>
+"use strict";
+/* =========================================================
+   СОБЫТИЯ МЫШИ
+========================================================= */
+let drag=null; // {mode,lastCell,start}
+function canvasPos(ev){
+  const r=cv.getBoundingClientRect();
+  return {x:ev.clientX-r.left,y:ev.clientY-r.top};
+}
+cv.addEventListener("mousedown",ev=>{
+  const p=canvasPos(ev);
+  const c=mouseCell(p.x,p.y);
+  if(ev.button===1||state.tool==="pan"){drag={mode:"pan",sx:p.x,sy:p.y,cx:state.cam.x,cy:state.cam.y};ev.preventDefault();return;}
+  if(ev.button===2){setTool("pan");drag={mode:"pan",sx:p.x,sy:p.y,cx:state.cam.x,cy:state.cam.y};ev.preventDefault();return;}
+  if(state.tool==="select"){
+    const b=getBlock(c.x,c.y);
+    state.sel=b?{x:c.x,y:c.y}:null;
+    renderProps();
+    return;
+  }
+  if(state.tool==="erase"){
+    if(getBlock(c.x,c.y)){removeBlock(c.x,c.y);renderProps();}
+    drag={mode:"erase"};
+    return;
+  }
+  if(state.tool==="belt"){
+    if(!getBlock(c.x,c.y))placeBlock("belt",c.x,c.y,dragDir);
+    drag={mode:"belt",last:c};
+    return;
+  }
+  if(state.tool==="block"){
+    if(state.paintType&&!getBlock(c.x,c.y)){
+      const b=placeBlock(state.paintType,c.x,c.y,BLOCKS[state.paintType].dir?state.paintDir:null);
+      state.sel={x:c.x,y:c.y};renderProps();
+    }
+    drag={mode:"paint"};
+    return;
+  }
+});
+let dragDir="E";
+window.addEventListener("mousemove",ev=>{
+  const p=canvasPos(ev);
+  const inCanvas=p.x>=0&&p.y>=0&&p.x<=cv.clientWidth&&p.y<=cv.clientHeight;
+  const c=mouseCell(p.x,p.y);
+  if(inCanvas)state.hover=getBlock(c.x,c.y)?{x:c.x,y:c.y}:null;
+  updateTooltip(ev,inCanvas);
+  if(!drag)return;
+  if(drag.mode==="pan"){
+    state.cam.x=drag.cx-(p.x-drag.sx)/state.cam.z;
+    state.cam.y=drag.cy-(p.y-drag.sy)/state.cam.z;
+    return;
+  }
+  if(drag.mode==="erase"){
+    if(getBlock(c.x,c.y)){removeBlock(c.x,c.y);renderProps();}
+    return;
+  }
+  if(drag.mode==="belt"){
+    const last=drag.last;
+    const dx=c.x-last.x,dy=c.y-last.y;
+    if(dx===0&&dy===0)return;
+    const dir=Math.abs(dx)>Math.abs(dy)?(dx>0?"E":"W"):(dy>0?"S":"N");
+    dragDir=dir;
+    const prev=getBlock(last.x,last.y);
+    if(prev&&prev.type==="belt")prev.dir=dir; // разворачиваем предыдущую клетку
+    if(!getBlock(c.x,c.y)){
+      placeBlock("belt",c.x,c.y,dir);
+    }else{
+      const cb=getBlock(c.x,c.y);
+      if(cb.type==="belt")cb.dir=dir;
+    }
+    drag.last=c;
+    touch();
+    return;
+  }
+  if(drag.mode==="paint"&&state.paintType){
+    if(!getBlock(c.x,c.y)&&!BLOCKS[state.paintType].dir){
+      placeBlock(state.paintType,c.x,c.y,null);
+    }else if(!getBlock(c.x,c.y)){
+      placeBlock(state.paintType,c.x,c.y,state.paintDir);
+    }
+  }
+});
+window.addEventListener("mouseup",()=>{drag=null;});
+cv.addEventListener("mouseleave",()=>{state.hover=null;document.getElementById("tooltip").style.display="none";});
+cv.addEventListener("contextmenu",ev=>ev.preventDefault());
+cv.addEventListener("wheel",ev=>{
+  ev.preventDefault();
+  const p=canvasPos(ev);
+  const before=screenToWorld(p.x,p.y);
+  const nz=clamp(state.cam.z*(ev.deltaY<0?1.15:0.87),0.35,3.5);
+  state.cam.z=nz;
+  const after=screenToWorld(p.x,p.y);
+  state.cam.x+=before.x-after.x;
+  state.cam.y+=before.y-after.y;
+  document.getElementById("stZoom").textContent="Масштаб: "+Math.round(nz*100)+"%";
+},{passive:false});
+
+function updateTooltip(ev,inCanvas){
+  const tip=document.getElementById("tooltip");
+  if(!inCanvas||!state.hover){tip.style.display="none";return;}
+  const b=state.blocks[k(state.hover.x,state.hover.y)];
+  if(!b){tip.style.display="none";return;}
+  const d=BLOCKS[b.type];
+  let html="<b>"+(d.e||iconFor(b.type))+" "+esc(d.n)+"</b>";
+  if(d.dir)html+='<div class="trow hint">выход: '+DIR_LETTER[b.dir||"E"]+"</div>";
+  if(d.source)html+='<div class="trow">подаёт: '+
+    (ITEMS[b.cfg.item]?ITEMS[b.cfg.item].e+" "+esc(ITEMS[b.cfg.item].n):"—")+"</div>";
+  if(d.recipes){
+    const r=recipeOf(b);
+    if(r)html+='<div class="trow">'+recipeText(r)+"</div>";
+    html+='<div class="trow hint">в очереди: '+
+      (b.q.length+b.buf.length+b.fq.length)+" · обработано: "+b.inN+"</div>";
+  }
+  const net=netInfo(b);
+  if(net)html+='<div class="trow hint">SU: '+net.load+"/"+(net.cap>1e6?"∞":net.cap)+
+    (net.cap>0&&!net.ok?" ⚠ перегрузка":"")+"</div>";
+  tip.innerHTML=html;
+  tip.style.display="block";
+  const wrap=cv.parentElement.getBoundingClientRect();
+  let tx=ev.clientX-wrap.left+14,ty=ev.clientY-wrap.top+14;
+  if(tx+240>wrap.width)tx=ev.clientX-wrap.left-246;
+  if(ty+90>wrap.height)ty=ev.clientY-wrap.top-95;
+  tip.style.left=tx+"px";tip.style.top=ty+"px";
+}
+/* =========================================================
+   КЛАВИАТУРА
+========================================================= */
+window.addEventListener("keydown",ev=>{
+  if(ev.target.tagName==="INPUT"||ev.target.tagName==="SELECT")return;
+  const key=ev.key.toLowerCase();
+  if(key==="v")setTool("select");
+  else if(key==="b")setTool("belt");
+  else if(key==="c")setTool("block");
+  else if(key==="e")setTool("erase");
+  else if(key==="h")setTool("pan");
+  else if(key==="r")rotateSel();
+  else if(ev.key==="Delete"||ev.key==="Backspace"){
+    if(state.sel){removeBlock(state.sel.x,state.sel.y);renderProps();}
+  }
+  else if(ev.code==="Space"){
+    ev.preventDefault();
+    togglePlay();
+  }
+  else if(ev.key.startsWith("Arrow")){
+    const s=40/state.cam.z;
+    if(ev.key==="ArrowLeft")state.cam.x-=s;
+    if(ev.key==="ArrowRight")state.cam.x+=s;
+    if(ev.key==="ArrowUp")state.cam.y-=s;
+    if(ev.key==="ArrowDown")state.cam.y+=s;
+    ev.preventDefault();
+  }
+});
+function rotateSel(){
+  if(state.sel){
+    const b=getBlock(state.sel.x,state.sel.y);
+    if(b&&BLOCKS[b.type].dir){
+      const i=DIR_ORDER.indexOf(b.dir||"E");
+      b.dir=DIR_ORDER[(i+1)%4];
+      renderProps();touch();
+      return;
+    }
+  }
+  const i=DIR_ORDER.indexOf(state.paintDir);
+  state.paintDir=DIR_ORDER[(i+1)%4];
+}
+/* =========================================================
+   ПАНЕЛЬ ИНСТРУМЕНТОВ
+========================================================= */
+document.querySelectorAll("[data-tool]").forEach(btn=>{
+  btn.onclick=()=>setTool(btn.dataset.tool);
+});
+function togglePlay(){
+  state.sim.running=!state.sim.running;
+  const btn=document.getElementById("btnPlay");
+  btn.textContent=state.sim.running?"⏸ Пауза":"▶ Пуск";
+  btn.classList.toggle("active",state.sim.running);
+}
+document.getElementById("btnPlay").onclick=togglePlay;
+document.getElementById("simSpeed").onchange=ev=>{state.sim.speed=Number(ev.target.value);};
+document.getElementById("btnResetSim").onclick=()=>{
+  resetSim(true);renderProps();
+};
+document.getElementById("btnDemo").onclick=loadDemo;
+document.getElementById("btnNew").onclick=()=>{
+  if(confirm("Очистить всю схему?"))clearAll();
+};
+document.getElementById("btnExport").onclick=exportJSON;
+document.getElementById("btnPNG").onclick=exportPNG;
+document.getElementById("btnImport").onclick=()=>document.getElementById("fileIn").click();
+document.getElementById("fileIn").onchange=ev=>{
+  const f=ev.target.files[0];
+  if(!f)return;
+  const rd=new FileReader();
+  rd.onload=()=>{
+    try{
+      const data=JSON.parse(rd.result);
+      if(!data||typeof data.blocks!=="object")throw new Error("bad");
+      applyData(data);renderProps();
+    }catch(e){alert("Файл не распознан как проект");}
+  };
+  rd.readAsText(f);
+  ev.target.value="";
+};
+document.getElementById("cbAuto").onchange=ev=>{
+  state.autoPower=ev.target.checked;computePower();renderProps();
+};
+document.getElementById("cbLabels").onchange=ev=>{state.showLabels=ev.target.checked;};
+document.getElementById("cbPower").onchange=ev=>{
+  state.showPower=ev.target.checked;computePower();
+};
+document.querySelectorAll("#tabs button").forEach(btn=>{
+  btn.onclick=()=>{
+    document.querySelectorAll("#tabs button").forEach(b=>b.classList.remove("active"));
+    document.querySelectorAll(".tabpage").forEach(p=>p.classList.remove("active"));
+    btn.classList.add("active");
+    document.getElementById("tab-"+btn.dataset.tab).classList.add("active");
+    if(btn.dataset.tab==="line")renderLine();
+  };
+});
+/* =========================================================
+   СТАТУС-БАР И ГЛАВНЫЙ ЦИКЛ
+========================================================= */
+function updateStatus(){
+  document.getElementById("stBlocks").textContent=
+    "Блоков: "+Object.keys(state.blocks).length;
+  document.getElementById("stItems").textContent=
+    "Предметов: "+state.items.length+" · жидкостей: "+state.fluids.length;
+  document.getElementById("stTime").textContent=
+    "Время: "+state.sim.t.toFixed(1)+" с";
+  let powerHtml="";
+  let warn="";
+  if(!state.autoPower){
+    const over=state.nets.filter(n=>n.cap>0&&!n.ok).length;
+    const gens=state.nets.filter(n=>n.cap>0&&n.ok).length;
+    powerHtml="Энергия: сетей с генераторами: "+gens+(over?' · <span class="err">перегружено: '+over+"</span>":"");
+    if(!gens)powerHtml+=' · <span class="warn">нет источников SU</span>';
+  }else powerHtml="Автопитание: вкл (SU не учитываются)";
+  document.getElementById("stPower").innerHTML=powerHtml;
+  if(state.stats.lost)
+    warn='<span class="warn">Потеряно предметов: '+state.stats.lost+"</span>";
+  document.getElementById("stWarn").innerHTML=warn;
+}
+let lastTime=performance.now(),statusAcc=0,propsAcc=0,lineAcc=0;
+function frame(now){
+  const dt=Math.min(0.05,(now-lastTime)/1000);
+  lastTime=now;
+  if(state.sim.running){
+    state.sim.t+=dt*state.sim.speed;
+    computePower();
+    step(dt*state.sim.speed);
+  }
+  render(now/1000);
+  statusAcc+=dt;propsAcc+=dt;lineAcc+=dt;
+  if(statusAcc>0.25){statusAcc=0;updateStatus();}
+  if(propsAcc>0.4){propsAcc=0;updateLive();}
+  if(lineAcc>1.5){
+    lineAcc=0;
+    const lineTab=document.getElementById("tab-line");
+    if(lineTab.classList.contains("active"))renderLine();
+  }
+  requestAnimationFrame(frame);
+}
+/* =========================================================
+   ИНИЦИАЛИЗАЦИЯ
+========================================================= */
+function init(){
+  buildPalette();
+  resize();
+  const list=document.getElementById("helpRecipes");
+  if(list){
+    let txt="";
+    for(const [g,rs] of Object.entries(RECIPES))
+      txt+=g+" ("+rs.length+") ";
+    list.textContent="Группы рецептов в планировщере: "+txt+
+      " — рецепты упрощены для планирования, в игре могут отличаться.";
+  }
+  if(!loadLocal()){
+    state.cam={x:-20,y:-40,z:1};
+    loadDemo();
+    state.sim.running=true;
+    document.getElementById("btnPlay").textContent="⏸ Пауза";
+    document.getElementById("btnPlay").classList.add("active");
+  }
+  setTool("select");
+  computePower();
+  renderProps();
+  updateStatus();
+  requestAnimationFrame(frame);
+}
+init();
+</script>
+</body>
+</html>
