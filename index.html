@@ -2182,8 +2182,8 @@ function drawCube3(bl,P,b,e){
   if(facing)for(const s of sides)
     if(s.nx===facing.x&&s.ny===facing.y)s.face="front";
   const faces=[{nx:0,ny:0,face:"top",c:[[x,y,h],[x+1,y,h],[x+1,y+1,h],[x,y+1,h]],shade:0}];
-  /* грань видна, если её нормаль смотрит на камеру: dot(n,f) < 0 */
-  for(const s of sides)if(s.nx*b.f.x+s.ny*b.f.y<-0.001)faces.push(s);
+  /* грань видна, если её нормаль смотрит на камеру: dot(n,f) > 0 */
+  for(const s of sides)if(s.nx*b.f.x+s.ny*b.f.y>0.001)faces.push(s);
   for(const f of faces){
     f.d=0;
     for(const p of f.c)f.d+=proj3(p[0],p[1],p[2],b).d;
