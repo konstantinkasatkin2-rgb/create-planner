@@ -110,6 +110,9 @@ emit chest__side      "$MJ" assets/minecraft/textures/block/crafting_table_side.
 emit chest__front     "$MJ" assets/minecraft/textures/block/crafting_table_front.png
 emit sink__top        "$MJ" assets/minecraft/textures/block/cauldron_top.png
 emit press__side      "$CJ" assets/create/textures/block/mechanical_press_side.png
+emit press__head      "$CJ" assets/create/textures/block/mechanical_press_head.png
+emit press__pole      "$CJ" assets/create/textures/block/mechanical_press_pole.png
+emit press__top       "$CJ" assets/create/textures/block/mechanical_press_top.png
 emit ejector__side    "$CJ" assets/create/textures/block/weighted_ejector_casing.png
 emit gearbox__top     "$CJ" assets/create/textures/block/gearbox_top.png
 emit fluid_tank__top  "$CJ" assets/create/textures/block/fluid_tank_top.png
