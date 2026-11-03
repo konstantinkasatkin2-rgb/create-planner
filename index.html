@@ -222,7 +222,11 @@ const TEXCROP={
   millstone_base:      ["millstone", 0,26,16, 6], /* бок цоколя:   uv [0,13,8,16]  */
   millstone_base__top: ["millstone", 0, 0,12,12], /* жернова сверху: uv [0,0,6,6]   */
   millstone_slab:      ["millstone",20,16,12, 4], /* бок плиты:    uv [10,8,16,10] */
-  millstone_slab__top: ["millstone",20, 4,12,12]  /* верх с отверстием: uv [16,2,10,8] */
+  millstone_slab__top: ["millstone",20, 4,12,12], /* верх с отверстием: uv [16,2,10,8] */
+  millstone_case:      ["millstone", 0,12,12, 5], /* бок корпуса шестерёнки: uv [0,6,6,8.5] */
+  millstone_case__top: ["millstone", 0, 0,12,12], /* верх корпуса (зубцы):   uv [0,0,6,6]   */
+  millstone_tooth:     ["millstone", 0,20,18, 6], /* бок зуба:    uv [0,10,9,13]  */
+  millstone_tooth__top:["millstone", 0,17,18, 3]  /* верх зуба:   uv [0,8.5,9,10] */
 };
 let TEXCROP_READY=false;
 function buildCrops(){
@@ -2093,7 +2097,7 @@ function view3dBasis(){
   const sy=Math.sin(c.yaw),cy=Math.cos(c.yaw);
   const sp=Math.sin(c.pitch),cp=Math.cos(c.pitch);
   return {
-    f:{x:sy*cp, y:cy*cp, z:-sp},   /* взгляд */
+    f:{x:sy*cp, y:cy*cp, z:sp},    /* взгляд: от камеры к сцене (камера сверху) */
     r:{x:cy,   y:-sy,   z:0},      /* вправо */
     u:{x:-sy*sp,y:-cy*sp,z:cp}     /* вверх по экрану */
   };
@@ -2158,9 +2162,11 @@ function drawFace3(pts,P,img,color,shade){
   const A=pts[0],B=pts[1],D=pts[3];
   const ux=B.x-A.x,uy=B.y-A.y,vx=D.x-A.x,vy=D.y-A.y;
   if(img&&img.width){
-    const n=img.width;
+    /* масштаб по ширине для u и по высоте для v: неквадратные кропы
+       (бок жернова 16×6) должны закрывать грань целиком */
+    const iw=img.width,ih=img.height||iw;
     ctx.save();
-    ctx.setTransform(ux/n*DPR,uy/n*DPR,vx/n*DPR,vy/n*DPR,A.x*DPR,A.y*DPR);
+    ctx.setTransform(ux/iw*DPR,uy/iw*DPR,vx/ih*DPR,vy/ih*DPR,A.x*DPR,A.y*DPR);
     ctx.imageSmoothingEnabled=false;
     ctx.drawImage(img,0,0);
     ctx.imageSmoothingEnabled=true;
@@ -2250,9 +2256,15 @@ function boxes3(bl){
     if(d.x!==0)return [{x0:x,y0:y+0.3,z0:0.3,x1:x+1,y1:y+0.7,z1:0.7,tex:"fluid_pipe"}];
     return [{x0:x+0.3,y0:y,z0:0.3,x1:x+0.7,y1:y+1,z1:0.7,tex:"fluid_pipe"}];
   }
-  if(t==="millstone"){ /* цоколь-основание + парящая верхняя плита (модель Create) */
+  if(t==="millstone"){ /* модель Create: кольцо-цоколь + шестерёнка в зазоре (inner.json) + парящая плита */
     return [
-      {x0:x,y0:y,z0:0,             x1:x+1,  y1:y+1,  z1:0.375,tex:"millstone_base"},
+      {x0:x,   y0:y,   z0:0,     x1:x+1, y1:y+1, z1:0.375, tex:"millstone_base"},
+      /* зубья (крест0°): на 1/16 шире ячейки, как в модели */
+      {x0:x+0.40625,y0:y-0.0625,z0:0.375, x1:x+0.59375,y1:y+1.0625,z1:0.75, tex:"millstone_tooth"},
+      {x0:x-0.0625,y0:y+0.40625,z0:0.375, x1:x+1.0625,y1:y+0.59375,z1:0.75, tex:"millstone_tooth"},
+      /* корпус шестерёнки GearCaseInner */
+      {x0:x+0.125,y0:y+0.125,z0:0.40625, x1:x+0.875,y1:y+0.875,z1:0.71875, tex:"millstone_case"},
+      /* парящая верхняя плита с отверстием */
       {x0:x+0.125,y0:y+0.125,z0:0.75, x1:x+0.875,y1:y+0.875,z1:1, tex:"millstone_slab"}
     ];
   }
@@ -2279,10 +2291,12 @@ function blockFaces3(bl,b){
     const faces=[{nx:0,ny:0,face:"top",c:[[x0,y0,z1],[x1,y0,z1],[x1,y1,z1],[x0,y1,z1]],shade:0}];
     /* грань видна, если её нормаль смотрит на камеру: dot(n,f) > 0 */
     for(const s of sides)if(s.nx*b.f.x+s.ny*b.f.y>0.001)faces.push(s);
+    /* глубина — по центру КОРОБКИ, а не грани: грани одной коробки не
+       пересекаются, а между коробками (машина vs конвейер) порядок по центру
+       коробки всегда совпадает с тем, что ближе к камере */
+    const db=proj3((x0+x1)/2,(y0+y1)/2,(z0+z1)/2,b).d;
     for(const f of faces){
-      let d=0;
-      for(const p of f.c)d+=proj3(p[0],p[1],p[2],b).d;
-      out.push({tex:bx.tex,face:f.face,c:f.c,shade:f.shade,color,d:d/4});
+      out.push({tex:bx.tex,face:f.face,c:f.c,shade:f.shade,color,d:db});
     }
   }
   return out;
@@ -2328,7 +2342,7 @@ function render3D(now){
     const host=state.blocks[k(o.cx,o.cy)];
     const z=h3(host?host.type:"belt")+0.18;
     const cc=P(px,py,z);
-    ents.push({d:cc.d-0.02,sprite:o.i,color:ITEMS[o.i]?ITEMS[o.i].c:"#888",
+    ents.push({d:cc.d+0.02,sprite:o.i,color:ITEMS[o.i]?ITEMS[o.i].c:"#888",
       cx:cc.x,cy:cc.y,size:state.cam3.scale*0.5});
   }
   for(const o of state.fluids){
@@ -2337,10 +2351,10 @@ function render3D(now){
     const host=state.blocks[k(o.cx,o.cy)];
     const z=h3(host?host.type:"fluid_pipe")+0.18;
     const cc=P(px,py,z);
-    ents.push({d:cc.d-0.02,sprite:o.f,color:FLUIDS[o.f]?FLUIDS[o.f].c:"#58a",
+    ents.push({d:cc.d+0.02,sprite:o.f,color:FLUIDS[o.f]?FLUIDS[o.f].c:"#58a",
       cx:cc.x,cy:cc.y,size:state.cam3.scale*0.4});
   }
-  ents.sort((a,c2)=>c2.d-a.d); /* дальние — первыми */
+  ents.sort((a,c2)=>a.d-c2.d); /* дальние (меньший d) — первыми */
   for(const e of ents){
     if(e.sprite){
       const s=e.size;
@@ -2416,12 +2430,12 @@ function render3D(now){
 }
 function pick3d(p){
   const V=make3d();
-  let best=null,bd=1e9;
+  let best=null,bd=-1e9;
   const rad=Math.max(16,state.cam3.scale*0.6);
   for(const bl of V.blocks){
     const q=V.P(bl.x+0.5,bl.y+0.5,hTop3(bl)/2);
     const dist=Math.hypot(q.x-p.x,q.y-p.y);
-    if(dist<rad&&q.d<bd){bd=q.d;best={x:bl.x,y:bl.y};}
+    if(dist<rad&&q.d>bd){bd=q.d;best={x:bl.x,y:bl.y};}
   }
   return best;
 }
